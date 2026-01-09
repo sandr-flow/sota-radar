@@ -1,0 +1,15 @@
+[project]
+name = "sota-radar"
+version = "0.1.0"
+description = "AI-powered arXiv digest bot with LLM summarization and Telegram delivery"
+requires-python = ">=3.10"
+
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

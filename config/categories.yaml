@@ -1,0 +1,34 @@
+# arXiv categories to track
+categories:
+  - id: cs.LG
+    name: Machine Learning
+    description: General ML, algorithms, theory
+  
+  - id: cs.CL
+    name: Computation and Language
+    description: NLP, LLMs, transformers
+  
+  - id: cs.CV
+    name: Computer Vision
+    description: Vision, image generation
+  
+  - id: cs.AI
+    name: Artificial Intelligence
+    description: General AI, reasoning
+  
+  - id: cs.NE
+    name: Neural and Evolutionary Computing
+    description: Neural network architectures
+  
+  - id: cs.IR
+    name: Information Retrieval
+    description: RAG, search, embeddings
+  
+  - id: stat.ML
+    name: Machine Learning (Statistics)
+    description: Statistical ML
+
+# Parsing settings
+settings:
+  max_results_per_category: 100
+  papers_per_digest: 10
