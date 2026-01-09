@@ -55,3 +55,34 @@ Manual session open/close without context manager.
 
 **Solution:**  
 Add `@contextmanager` wrapper for cleaner session handling.
+
+---
+
+## TD-004: LLM API Error Handling & Retries
+
+**Priority:** Medium  
+**Impact:** Reliability  
+**Added:** 2026-01-09
+
+**Current state:**  
+No retry logic on API failures. Single timeout (60s) hardcoded.
+
+**When to fix:**  
+When running batch summarization and seeing transient failures.
+
+**Solution:**  
+Add exponential backoff retry with `tenacity` or custom implementation.
+
+---
+
+## TD-005: LLM Rate Limiting
+
+**Priority:** Medium  
+**Impact:** API costs, rate limit errors  
+**Added:** 2026-01-09
+
+**Current state:**  
+No rate limiting for LLM API calls. Batch summarization could hit limits.
+
+**Solution:**  
+Add rate limiter (e.g., `aiolimiter`) to respect API quotas.
