@@ -6,6 +6,7 @@ from typing import Any
 import httpx
 
 from src.llm.base import BaseLLMProvider
+from src.llm.rate_limiter import MISTRAL_RATE_LIMITER
 
 # Mistral API configuration
 MISTRAL_API_URL = "https://api.mistral.ai/v1/chat/completions"
@@ -16,6 +17,7 @@ class MistralProvider(BaseLLMProvider):
     """Mistral AI provider implementation.
 
     Uses Mistral API for summarization and translation.
+    Rate limited to 1 RPS for free tier compliance.
     """
 
     def __init__(
@@ -27,7 +29,7 @@ class MistralProvider(BaseLLMProvider):
 
         Args:
             api_key: Mistral API key. Defaults to MISTRAL_API_KEY env var.
-            model: Model to use. Defaults to mistral-small-latest.
+            model: Model to use. Defaults to mistral-large-latest.
         """
         self.api_key = api_key or os.getenv("MISTRAL_API_KEY")
         if not self.api_key:
@@ -40,7 +42,7 @@ class MistralProvider(BaseLLMProvider):
         return "mistral"
 
     async def _call_api(self, messages: list[dict[str, str]]) -> str:
-        """Make API call to Mistral.
+        """Make rate-limited API call to Mistral.
 
         Args:
             messages: Chat messages.
@@ -48,6 +50,9 @@ class MistralProvider(BaseLLMProvider):
         Returns:
             Model response text.
         """
+        # Enforce 1 RPS rate limit
+        await MISTRAL_RATE_LIMITER.acquire()
+
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",

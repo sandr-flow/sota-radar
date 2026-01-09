@@ -75,14 +75,13 @@ Add exponential backoff retry with `tenacity` or custom implementation.
 
 ---
 
-## TD-005: LLM Rate Limiting
+## TD-005: LLM Rate Limiting ✅ RESOLVED
 
 **Priority:** Medium  
 **Impact:** API costs, rate limit errors  
-**Added:** 2026-01-09
+**Added:** 2026-01-09  
+**Resolved:** 2026-01-09
 
-**Current state:**  
-No rate limiting for LLM API calls. Batch summarization could hit limits.
-
-**Solution:**  
-Add rate limiter (e.g., `aiolimiter`) to respect API quotas.
+**Solution implemented:**  
+Added `aiolimiter` with 1 RPS limit in `src/llm/rate_limiter.py`.  
+All Mistral API calls go through rate limiter in `_call_api()` method.
