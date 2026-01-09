@@ -85,3 +85,62 @@ Add exponential backoff retry with `tenacity` or custom implementation.
 **Solution implemented:**  
 Added `aiolimiter` with 1 RPS limit in `src/llm/rate_limiter.py`.  
 All Mistral API calls go through rate limiter in `_call_api()` method.
+
+---
+
+## TD-006: Bot Graceful Shutdown
+
+**Priority:** Low  
+**Impact:** Log noise, potential data loss  
+**Added:** 2026-01-09
+
+**Current state:**  
+`KeyboardInterrupt` causes messy traceback on shutdown. No signal handling.
+
+**Solution:**  
+Implement signal handlers for SIGINT/SIGTERM to close sessions and polling cleanly.
+
+---
+
+## TD-007: User Tracking
+
+**Priority:** Low  
+**Impact:** Personalization  
+**Added:** 2026-01-09
+
+**Current state:**  
+Bot is stateless regarding users. Doesn't track who is using it.
+
+**When to fix:**  
+When complying with Phase 5 (paid translations) or multi-user preferences.
+
+**Solution:**  
+Add `users` table to DB. Capture `user_id` on /start.
+
+---
+
+## TD-008: Pagination
+
+**Priority:** Low  
+**Impact:** UX  
+**Added:** 2026-01-09
+
+**Current state:**  
+`/digest` shows fixed 10 latest papers. No way to see older ones.
+
+**Solution:**  
+Add pagination buttons (InlineKeyboard) to browse older digests.
+
+---
+
+## TD-009: Markdown Support
+
+**Priority:** Low  
+**Impact:** UX, content formatting  
+**Added:** 2026-01-09
+
+**Current state:**  
+Bot uses `parse_mode="HTML"`. LLM summaries might contain Markdown which is currently stripped or displayed raw.
+
+**Solution:**  
+Switch to `parse_mode="MarkdownV2"` and ensure LLM output is properly escaped.
