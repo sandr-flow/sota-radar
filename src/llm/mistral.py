@@ -1,8 +1,5 @@
 """Mistral LLM provider implementation."""
 
-import os
-from typing import Any
-
 import httpx
 
 from src.llm.base import BaseLLMProvider
@@ -10,7 +7,6 @@ from src.llm.rate_limiter import MISTRAL_RATE_LIMITER
 
 # Mistral API configuration
 MISTRAL_API_URL = "https://api.mistral.ai/v1/chat/completions"
-DEFAULT_MODEL = "mistral-large-latest"
 
 
 class MistralProvider(BaseLLMProvider):
@@ -23,18 +19,18 @@ class MistralProvider(BaseLLMProvider):
     def __init__(
         self,
         api_key: str | None = None,
-        model: str = DEFAULT_MODEL,
+        model: str | None = None,
     ):
         """Initialize Mistral provider.
 
         Args:
-            api_key: Mistral API key. Defaults to MISTRAL_API_KEY env var.
-            model: Model to use. Defaults to mistral-large-latest.
+            api_key: Mistral API key. Defaults to settings.MISTRAL_API_KEY.
+            model: Model to use. Defaults to settings.MISTRAL_MODEL.
         """
-        self.api_key = api_key or os.getenv("MISTRAL_API_KEY")
-        if not self.api_key:
-            raise ValueError("MISTRAL_API_KEY not set")
-        self.model = model
+        from src.config.settings import settings
+        
+        self.api_key = api_key or settings.MISTRAL_API_KEY
+        self.model = model or settings.MISTRAL_MODEL
 
     @property
     def provider_name(self) -> str:

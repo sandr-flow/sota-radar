@@ -2,22 +2,12 @@
 
 import asyncio
 import logging
-import os
-import sys
-from pathlib import Path
 
-# Add project root to path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+from aiogram import Bot, Dispatcher
 
-from dotenv import load_dotenv
-load_dotenv()
-
-from aiogram import Bot, Dispatcher, Router
-from aiogram.filters import Command
-from aiogram.types import Message
-
+from src.config.settings import settings
 from src.bot.handlers import register_handlers
-from src.pipeline.summarizer import run_full_pipeline
+from src.pipeline.summarizer import background_pipeline
 
 # Configure logging
 logging.basicConfig(
@@ -26,38 +16,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Pipeline settings
-PIPELINE_INTERVAL_MINUTES = 5
-
-
-async def background_pipeline():
-    """Run summarization pipeline periodically in background.
-    
-    Runs immediately on startup, then every PIPELINE_INTERVAL_MINUTES.
-    """
-    while True:
-        try:
-            logger.info("🚀 Starting background pipeline run...")
-            stats = await run_full_pipeline()
-            logger.info(
-                f"✅ Pipeline completed: "
-                f"added={stats['papers_added']}, "
-                f"summarized={stats['summarized']}, "
-                f"errors={stats['summary_errors']}"
-            )
-        except Exception as e:
-            logger.error(f"❌ Pipeline error: {e}")
-        
-        await asyncio.sleep(PIPELINE_INTERVAL_MINUTES * 60)
-
 
 async def main():
     """Start the bot with background pipeline."""
-    token = os.getenv("TELEGRAM_BOT_TOKEN")
-    if not token:
-        logger.error("TELEGRAM_BOT_TOKEN not set!")
-        return
-
+    token = settings.TELEGRAM_BOT_TOKEN
+    
     bot = Bot(token=token)
     dp = Dispatcher()
 
@@ -65,8 +28,9 @@ async def main():
     register_handlers(dp)
 
     # Start background pipeline task
+    # Note: background_pipeline is now imported from pipeline module
     asyncio.create_task(background_pipeline())
-    logger.info(f"📡 Background pipeline started (interval: {PIPELINE_INTERVAL_MINUTES}min)")
+    logger.info(f"📡 Background pipeline started (interval: {settings.PIPELINE_INTERVAL_MINUTES}min)")
 
     logger.info("Starting sota-radar bot...")
     await dp.start_polling(bot)

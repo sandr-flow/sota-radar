@@ -4,10 +4,32 @@ import asyncio
 import logging
 from datetime import datetime
 
+from src.config.settings import settings
 from src.llm import get_provider
 from src.storage import get_session, init_db, PaperRepository
 
 logger = logging.getLogger(__name__)
+
+
+async def background_pipeline():
+    """Run summarization pipeline periodically in background.
+    
+    Runs immediately on startup, then every PIPELINE_INTERVAL_MINUTES.
+    """
+    while True:
+        try:
+            logger.info("🚀 Starting background pipeline run...")
+            stats = await run_full_pipeline()
+            logger.info(
+                f"✅ Pipeline completed: "
+                f"added={stats['papers_added']}, "
+                f"summarized={stats['summarized']}, "
+                f"errors={stats['summary_errors']}"
+            )
+        except Exception as e:
+            logger.error(f"❌ Pipeline error: {e}", exc_info=True)
+        
+        await asyncio.sleep(settings.PIPELINE_INTERVAL_MINUTES * 60)
 
 
 async def summarize_papers(batch_size: int = 10) -> tuple[int, int]:
@@ -23,6 +45,7 @@ async def summarize_papers(batch_size: int = 10) -> tuple[int, int]:
         Tuple of (success_count, error_count).
     """
     # Initialize
+    # Note: init_db is essentially a no-op if logic is already done, keeping for safety
     init_db()
     session = get_session()
     repo = PaperRepository(session)
@@ -65,8 +88,8 @@ async def summarize_papers(batch_size: int = 10) -> tuple[int, int]:
 
 async def run_full_pipeline(
     categories: list[str] | None = None,
-    max_per_category: int = 20,
-    summarize_batch: int = 10,
+    max_per_category: int | None = None,
+    summarize_batch: int | None = None,
 ) -> dict:
     """Run full pipeline: fetch papers, store, summarize.
 
@@ -81,7 +104,13 @@ async def run_full_pipeline(
     from src.config import load_config
     from src.sources.arxiv import ArxivSource
 
-    # Load config
+    if max_per_category is None:
+        max_per_category = settings.MAX_RESULTS_PER_CATEGORY
+    
+    if summarize_batch is None:
+        summarize_batch = settings.PAPERS_PER_DIGEST # Use digest size as logical batch default
+
+    # Load config (legacy loader for categories until fully migrated)
     config = load_config()
     if categories is None:
         categories = [c.id for c in config.categories]
@@ -98,11 +127,14 @@ async def run_full_pipeline(
 
     for category in categories:
         logger.info(f"Fetching from {category}...")
-        papers = await source.fetch_papers(category=category, max_results=max_per_category)
-        added, skipped = repo.add_many(papers)
-        total_added += added
-        total_skipped += skipped
-        logger.info(f"  Added: {added}, Skipped: {skipped}")
+        try:
+            papers = await source.fetch_papers(category=category, max_results=max_per_category)
+            added, skipped = repo.add_many(papers)
+            total_added += added
+            total_skipped += skipped
+            logger.info(f"  Added: {added}, Skipped: {skipped}")
+        except Exception as e:
+            logger.error(f"Failed to fetch category {category}: {e}")
 
     session.close()
 
