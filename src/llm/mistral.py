@@ -78,43 +78,53 @@ class MistralProvider(BaseLLMProvider):
 
         return data["choices"][0]["message"]["content"]
 
-    async def summarize(self, text: str, max_length: int = 500) -> str:
-        """Generate summary for paper abstract.
+    async def generate_bilingual_summary(self, text: str, max_length: int = 500) -> dict[str, str]:
+        """Generate bilingual summary (EN + RU) for paper abstract in one call.
 
         Args:
             text: Paper abstract to summarize.
-            max_length: Maximum summary length.
+            max_length: Maximum summary length per language.
 
         Returns:
-            Concise summary.
+            Dict with 'en' and 'ru' keys containing summaries.
+        
+        Raises:
+            ValueError: If JSON parsing fails or response format is invalid.
         """
-        prompt_template = self.prompts["summarize"]
+        prompt_template = self.prompts["bilingual_summary"]
         prompt = prompt_template.format(text=text, max_length=max_length)
 
-        messages = [{"role": "user", "content": prompt}]
-        return await self._call_api(messages)
-
-    async def translate(self, text: str, target_language: str = "ru") -> str:
-        """Translate text to target language.
-
-        Args:
-            text: Text to translate (English).
-            target_language: Target language code.
-
-        Returns:
-            Translated text.
-        """
-        language_names = {
-            "ru": "Russian",
-            "es": "Spanish",
-            "zh": "Chinese",
-            "de": "German",
-            "fr": "French",
+        # Request JSON mode from Mistral
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
         }
-        target_name = language_names.get(target_language, target_language)
+        payload = {
+            "model": self.model,
+            "messages": [{"role": "user", "content": prompt}],
+            "response_format": {"type": "json_object"},
+        }
 
-        prompt_template = self.prompts["translate"]
-        prompt = prompt_template.format(text=text, target_language=target_name)
+        # Enforce rate limit
+        await MISTRAL_RATE_LIMITER.acquire()
 
-        messages = [{"role": "user", "content": prompt}]
-        return await self._call_api(messages)
+        client = get_client()
+        response = await client.post(
+            MISTRAL_API_URL,
+            headers=headers,
+            json=payload,
+        )
+        response.raise_for_status()
+        data = response.json()
+
+        content = data["choices"][0]["message"]["content"]
+        
+        # Parse JSON response
+        import json
+        try:
+            summary_dict = json.loads(content)
+            if "en" not in summary_dict or "ru" not in summary_dict:
+                raise ValueError("Missing 'en' or 'ru' keys in response")
+            return summary_dict
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Failed to parse JSON response: {e}") from e

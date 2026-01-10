@@ -62,16 +62,11 @@ async def summarize_papers(batch_size: int = 10) -> tuple[int, int]:
         try:
             logger.info(f"Summarizing: {paper.source_id} - {paper.title[:50]}...")
 
-            # Generate English summary (rate limited by provider)
-            summary_en = await provider.summarize(paper.abstract)
-            logger.info(f"  EN summary generated")
-
-            # Translate to Russian
-            summary_ru = await provider.translate(summary_en, target_language="ru")
-            logger.info(f"  RU translation generated")
+            # Generate bilingual summary in one call (rate limited by provider)
+            summary_dict = await provider.generate_bilingual_summary(paper.abstract)
+            logger.info(f"  Bilingual summary generated (EN + RU)")
 
             # Save bilingual summary as JSON (run in thread)
-            summary_dict = {"en": summary_en, "ru": summary_ru}
             await asyncio.to_thread(repo.update_summary, paper.id, summary_dict)
 
             success += 1

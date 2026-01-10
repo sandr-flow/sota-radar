@@ -7,7 +7,7 @@ class BaseLLMProvider(ABC):
     """Abstract base class for LLM providers.
 
     All LLM implementations must inherit from this class and implement
-    the required methods for summarization and translation.
+    bilingual summarization.
     """
 
     @property
@@ -17,27 +17,14 @@ class BaseLLMProvider(ABC):
         pass
 
     @abstractmethod
-    async def summarize(self, text: str, max_length: int = 500) -> str:
-        """Generate summary for the given text.
+    async def generate_bilingual_summary(self, text: str, max_length: int = 500) -> dict[str, str]:
+        """Generate bilingual summary for the given text.
 
         Args:
             text: Text to summarize (typically paper abstract).
-            max_length: Maximum summary length in characters.
+            max_length: Maximum summary length per language in characters.
 
         Returns:
-            Generated summary.
-        """
-        pass
-
-    @abstractmethod
-    async def translate(self, text: str, target_language: str = "ru") -> str:
-        """Translate text to target language.
-
-        Args:
-            text: Text to translate.
-            target_language: Target language code (default: Russian).
-
-        Returns:
-            Translated text.
+            Dict with 'en' and 'ru' keys containing summaries.
         """
         pass

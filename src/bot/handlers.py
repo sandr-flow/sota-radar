@@ -193,7 +193,7 @@ async def callback_paper(callback: CallbackQuery):
 
     # Build response
     title = html.escape(paper.title)
-    summary = html.escape(summary)
+    summary = html.escape(summary)  # Escape to ensure plain text display
     
     response = (
         f"<b>{title}</b>\n\n"
