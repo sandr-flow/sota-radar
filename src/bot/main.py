@@ -33,8 +33,16 @@ async def main():
     logger.info(f"📡 Background pipeline started (interval: {settings.PIPELINE_INTERVAL_MINUTES}min)")
 
     logger.info("Starting sota-radar bot...")
-    await dp.start_polling(bot)
+    try:
+        await dp.start_polling(bot)
+    finally:
+        from src.infrastructure.http_client import close_client
+        await close_client()
+        logger.info("👋 Bot shutdown complete.")
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        pass

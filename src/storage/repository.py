@@ -69,7 +69,7 @@ class PaperRepository:
         return model
 
     def add_many(self, papers: list[Paper]) -> tuple[int, int]:
-        """Add multiple papers, skipping duplicates.
+        """Add multiple papers, skipping duplicates using bulk insert.
 
         Args:
             papers: List of papers to add.
@@ -77,14 +77,41 @@ class PaperRepository:
         Returns:
             Tuple of (added_count, skipped_count).
         """
-        added = 0
-        skipped = 0
-        for paper in papers:
-            if self.add(paper):
-                added += 1
-            else:
-                skipped += 1
-        return added, skipped
+        if not papers:
+            return 0, 0
+            
+        from sqlalchemy.dialects.sqlite import insert
+
+        # Prepare list of dicts for bulk insert
+        values = [
+            {
+                "source": paper.source,
+                "source_id": paper.source_id,
+                "title": paper.title,
+                "abstract": paper.abstract,
+                "authors": json.dumps(paper.authors),
+                "published": paper.published,
+                "url": paper.url,
+                "pdf_url": paper.pdf_url,
+                "created_at": datetime.utcnow()
+            }
+            for paper in papers
+        ]
+
+        stmt = insert(PaperModel).values(values)
+        
+        # On conflict do nothing (deduplication)
+        stmt = stmt.on_conflict_do_nothing(
+            index_elements=["source", "source_id"]
+        )
+        
+        result = self.session.execute(stmt)
+        self.session.commit()
+        
+        added_count = result.rowcount
+        skipped_count = len(papers) - added_count
+        
+        return added_count, skipped_count
 
     def get_by_id(self, paper_id: int) -> PaperModel | None:
         """Get paper by database ID.

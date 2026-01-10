@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, String, Text
+from sqlalchemy import BigInteger, DateTime, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -40,7 +40,7 @@ class PaperModel(Base):
     )
 
     __table_args__ = (
-        # Composite unique constraint for deduplication
+        UniqueConstraint("source", "source_id", name="uq_paper_source"),
         {"sqlite_autoincrement": True},
     )
 

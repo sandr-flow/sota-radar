@@ -1,0 +1,19 @@
+prompts:
+  summarize: |
+    Summarize the following scientific paper abstract in 2-3 sentences.
+    Focus on: main contribution, method, and key results.
+    Keep it under {max_length} characters.
+
+    Abstract:
+    {text}
+
+    Summary:
+
+  translate: |
+    Translate the following scientific text to {target_language}.
+    Preserve technical terminology where appropriate.
+    Output ONLY the translation, without any preamble, introduction, or explanation.
+    Do not write "Here is the translation" or similar phrases.
+
+    Text:
+    {text}

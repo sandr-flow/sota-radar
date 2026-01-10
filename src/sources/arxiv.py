@@ -5,6 +5,7 @@ from datetime import datetime
 
 import httpx
 
+from src.infrastructure.http_client import get_client
 from src.models.paper import Paper
 from src.sources.base import BaseSource
 
@@ -49,9 +50,9 @@ class ArxivSource(BaseSource):
             "sortOrder": "descending",
         }
 
-        async with httpx.AsyncClient() as client:
-            response = await client.get(ARXIV_API_URL, params=params, timeout=30.0)
-            response.raise_for_status()
+        client = get_client()
+        response = await client.get(ARXIV_API_URL, params=params)
+        response.raise_for_status()
 
         return self._parse_response(response.text)
 

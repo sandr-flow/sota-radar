@@ -51,8 +51,8 @@ async def summarize_papers(batch_size: int = 10) -> tuple[int, int]:
     repo = PaperRepository(session)
     provider = get_provider()
 
-    # Get unsummarized papers
-    papers = repo.get_unsummarized(limit=batch_size)
+    # Get unsummarized papers (run in thread to avoid blocking)
+    papers = await asyncio.to_thread(repo.get_unsummarized, limit=batch_size)
     logger.info(f"Found {len(papers)} unsummarized papers")
 
     success = 0
@@ -70,9 +70,9 @@ async def summarize_papers(batch_size: int = 10) -> tuple[int, int]:
             summary_ru = await provider.translate(summary_en, target_language="ru")
             logger.info(f"  RU translation generated")
 
-            # Save bilingual summary as JSON
+            # Save bilingual summary as JSON (run in thread)
             summary_dict = {"en": summary_en, "ru": summary_ru}
-            repo.update_summary(paper.id, summary_dict)
+            await asyncio.to_thread(repo.update_summary, paper.id, summary_dict)
 
             success += 1
             logger.info(f"✓ Summarized {paper.source_id}")
@@ -129,7 +129,10 @@ async def run_full_pipeline(
         logger.info(f"Fetching from {category}...")
         try:
             papers = await source.fetch_papers(category=category, max_results=max_per_category)
-            added, skipped = repo.add_many(papers)
+            
+            # Run bulk insert in thread to avoid blocking
+            added, skipped = await asyncio.to_thread(repo.add_many, papers)
+            
             total_added += added
             total_skipped += skipped
             logger.info(f"  Added: {added}, Skipped: {skipped}")

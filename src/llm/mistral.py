@@ -1,7 +1,11 @@
 """Mistral LLM provider implementation."""
 
+from pathlib import Path
+import yaml
 import httpx
 
+from src.config.settings import settings
+from src.infrastructure.http_client import get_client
 from src.llm.base import BaseLLMProvider
 from src.llm.rate_limiter import MISTRAL_RATE_LIMITER
 
@@ -27,10 +31,15 @@ class MistralProvider(BaseLLMProvider):
             api_key: Mistral API key. Defaults to settings.MISTRAL_API_KEY.
             model: Model to use. Defaults to settings.MISTRAL_MODEL.
         """
-        from src.config.settings import settings
-        
         self.api_key = api_key or settings.MISTRAL_API_KEY
         self.model = model or settings.MISTRAL_MODEL
+        self._load_prompts()
+
+    def _load_prompts(self):
+        """Load prompts from YAML config."""
+        prompts_path = settings.BASE_DIR / "config" / "prompts.yaml"
+        with open(prompts_path, encoding="utf-8") as f:
+            self.prompts = yaml.safe_load(f)["prompts"]
 
     @property
     def provider_name(self) -> str:
@@ -58,15 +67,14 @@ class MistralProvider(BaseLLMProvider):
             "messages": messages,
         }
 
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                MISTRAL_API_URL,
-                headers=headers,
-                json=payload,
-                timeout=60.0,
-            )
-            response.raise_for_status()
-            data = response.json()
+        client = get_client()
+        response = await client.post(
+            MISTRAL_API_URL,
+            headers=headers,
+            json=payload,
+        )
+        response.raise_for_status()
+        data = response.json()
 
         return data["choices"][0]["message"]["content"]
 
@@ -80,14 +88,8 @@ class MistralProvider(BaseLLMProvider):
         Returns:
             Concise summary.
         """
-        prompt = f"""Summarize the following scientific paper abstract in 2-3 sentences.
-Focus on: main contribution, method, and key results.
-Keep it under {max_length} characters.
-
-Abstract:
-{text}
-
-Summary:"""
+        prompt_template = self.prompts["summarize"]
+        prompt = prompt_template.format(text=text, max_length=max_length)
 
         messages = [{"role": "user", "content": prompt}]
         return await self._call_api(messages)
@@ -111,13 +113,8 @@ Summary:"""
         }
         target_name = language_names.get(target_language, target_language)
 
-        prompt = f"""Translate the following scientific text to {target_name}.
-Preserve technical terminology where appropriate.
-Output ONLY the translation, without any preamble, introduction, or explanation.
-Do not write "Here is the translation" or similar phrases.
-
-Text:
-{text}"""
+        prompt_template = self.prompts["translate"]
+        prompt = prompt_template.format(text=text, target_language=target_name)
 
         messages = [{"role": "user", "content": prompt}]
         return await self._call_api(messages)
