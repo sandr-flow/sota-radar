@@ -11,9 +11,10 @@ logger = logging.getLogger(__name__)
 
 
 async def summarize_papers(batch_size: int = 10) -> tuple[int, int]:
-    """Summarize unsummarized papers in database.
+    """Summarize unsummarized papers in database (bilingual EN + RU).
 
     Rate limiting is handled by the LLM provider (1 RPS for Mistral free tier).
+    Each paper requires 2 API calls: summarize (EN) + translate (RU).
 
     Args:
         batch_size: Number of papers to process in one run.
@@ -38,11 +39,17 @@ async def summarize_papers(batch_size: int = 10) -> tuple[int, int]:
         try:
             logger.info(f"Summarizing: {paper.source_id} - {paper.title[:50]}...")
 
-            # Generate summary (rate limited by provider)
-            summary = await provider.summarize(paper.abstract)
+            # Generate English summary (rate limited by provider)
+            summary_en = await provider.summarize(paper.abstract)
+            logger.info(f"  EN summary generated")
 
-            # Save to database
-            repo.update_summary(paper.id, summary)
+            # Translate to Russian
+            summary_ru = await provider.translate(summary_en, target_language="ru")
+            logger.info(f"  RU translation generated")
+
+            # Save bilingual summary as JSON
+            summary_dict = {"en": summary_en, "ru": summary_ru}
+            repo.update_summary(paper.id, summary_dict)
 
             success += 1
             logger.info(f"✓ Summarized {paper.source_id}")

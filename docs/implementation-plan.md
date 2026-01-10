@@ -94,28 +94,31 @@
 - [x] Implement `/digest` command — show today's papers
 - [x] Format message: title + summary + links
 
-### 4.3 Paper Details
-- [ ] Implement inline buttons: "Read more", "Original", "PDF"
-- [ ] Show full summary on "Read more"
+### 4.3 Paper Details ✅
+- [x] Inline keyboard with paper titles in `/digest`
+- [x] Callback handler shows full summary on button click
+- [x] Links to arXiv and PDF
 
-### 4.4 Scheduled Delivery
-- [ ] Add user subscription model
-- [ ] Send digest at user's preferred time
-- [ ] Implement `/subscribe` and `/unsubscribe`
+### 4.4 Multi-Language Support ✅
+- [x] `UserModel` table for language preferences
+- [x] `/start` with language selection (🇬🇧/🇷🇺)  
+- [x] `/language` command to change preference
+- [x] Bilingual summaries stored as JSON `{"en": ..., "ru": ...}`
+- [x] Localized UI strings
 
 ---
 
-## Phase 5: Translation (Paid Feature)
+## Phase 5: Translation ✅
 
-### 5.1 Translator Integration
-- [ ] Port/adapt TypeScript translator prototype
-- [ ] Create `src/llm/translator.py`
-- [ ] Add scientific terminology handling
+> **Decision:** Translation integrated into core pipeline, not a paid feature.
+
+### 5.1 Translator Integration ✅
+- [x] Use existing `MistralProvider.translate()` method
+- [x] Pipeline generates EN summary, then translates to RU
+- [x] Both stored as JSON in `summary_json` field
 
 ### 5.2 Payment Integration
-- [ ] Choose payment provider (TBD)
-- [ ] Implement subscription check
-- [ ] Gate translation behind payment
+- [ ] Deferred — translation now free for all users
 
 ---
 

@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from src.models.paper import Paper
-from src.storage.models import PaperModel
+from src.storage.models import PaperModel, UserModel
 
 
 class PaperRepository:
@@ -86,6 +86,18 @@ class PaperRepository:
                 skipped += 1
         return added, skipped
 
+    def get_by_id(self, paper_id: int) -> PaperModel | None:
+        """Get paper by database ID.
+
+        Args:
+            paper_id: Paper database ID.
+
+        Returns:
+            PaperModel or None if not found.
+        """
+        stmt = select(PaperModel).where(PaperModel.id == paper_id)
+        return self.session.execute(stmt).scalar_one_or_none()
+
     def get_unsummarized(self, limit: int = 100) -> list[PaperModel]:
         """Get papers without summaries.
 
@@ -97,22 +109,22 @@ class PaperRepository:
         """
         stmt = (
             select(PaperModel)
-            .where(PaperModel.summary.is_(None))
+            .where(PaperModel.summary_json.is_(None))
             .order_by(PaperModel.published.desc())
             .limit(limit)
         )
         return list(self.session.execute(stmt).scalars().all())
 
-    def update_summary(self, paper_id: int, summary: str) -> None:
-        """Update paper summary.
+    def update_summary(self, paper_id: int, summary_dict: dict[str, str]) -> None:
+        """Update paper summary with bilingual JSON.
 
         Args:
             paper_id: Paper database ID.
-            summary: Generated summary text.
+            summary_dict: Dict with language keys, e.g. {"en": "...", "ru": "..."}.
         """
         stmt = select(PaperModel).where(PaperModel.id == paper_id)
         paper = self.session.execute(stmt).scalar_one()
-        paper.summary = summary
+        paper.summary_json = json.dumps(summary_dict, ensure_ascii=False)
         paper.summarized_at = datetime.utcnow()
         self.session.commit()
 
@@ -132,6 +144,20 @@ class PaperRepository:
         )
         return list(self.session.execute(stmt).scalars().all())
 
+    def reset_all_summaries(self) -> int:
+        """Reset all summaries for re-summarization.
+
+        Returns:
+            Number of papers reset.
+        """
+        stmt = select(PaperModel).where(PaperModel.summary_json.isnot(None))
+        papers = list(self.session.execute(stmt).scalars().all())
+        for paper in papers:
+            paper.summary_json = None
+            paper.summarized_at = None
+        self.session.commit()
+        return len(papers)
+
     def count(self) -> int:
         """Get total paper count.
 
@@ -141,3 +167,52 @@ class PaperRepository:
         from sqlalchemy import func
         stmt = select(func.count(PaperModel.id))
         return self.session.execute(stmt).scalar() or 0
+
+
+class UserRepository:
+    """Repository for user preferences."""
+
+    def __init__(self, session: Session):
+        """Initialize repository with database session."""
+        self.session = session
+
+    def get_or_create(self, telegram_id: int) -> UserModel:
+        """Get user by telegram ID or create new.
+
+        Args:
+            telegram_id: Telegram user ID.
+
+        Returns:
+            UserModel instance.
+        """
+        stmt = select(UserModel).where(UserModel.telegram_id == telegram_id)
+        user = self.session.execute(stmt).scalar_one_or_none()
+        if user is None:
+            user = UserModel(telegram_id=telegram_id, language="en")
+            self.session.add(user)
+            self.session.commit()
+        return user
+
+    def get_language(self, telegram_id: int) -> str:
+        """Get user's preferred language.
+
+        Args:
+            telegram_id: Telegram user ID.
+
+        Returns:
+            Language code ('en' or 'ru').
+        """
+        user = self.get_or_create(telegram_id)
+        return user.language
+
+    def set_language(self, telegram_id: int, language: str) -> None:
+        """Set user's preferred language.
+
+        Args:
+            telegram_id: Telegram user ID.
+            language: Language code ('en' or 'ru').
+        """
+        user = self.get_or_create(telegram_id)
+        user.language = language
+        self.session.commit()
+

@@ -117,12 +117,11 @@ Summary:"""
 
         prompt = f"""Translate the following scientific text to {target_name}.
 Preserve technical terminology where appropriate.
-Keep the same formatting and structure.
+Output ONLY the translation, without any preamble, introduction, or explanation.
+Do not write "Here is the translation" or similar phrases.
 
 Text:
-{text}
-
-Translation:"""
+{text}"""
 
         messages = [{"role": "user", "content": prompt}]
         return await self._call_api(messages)

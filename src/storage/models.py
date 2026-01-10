@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, String, Text
+from sqlalchemy import BigInteger, DateTime, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -30,8 +30,8 @@ class PaperModel(Base):
     url: Mapped[str] = mapped_column(String(500), nullable=False)
     pdf_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     
-    # Summarization fields
-    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Summarization fields - JSON format: {"en": "...", "ru": "..."}
+    summary_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     summarized_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     
     # Metadata
@@ -47,3 +47,21 @@ class PaperModel(Base):
     def __repr__(self) -> str:
         """Return string representation."""
         return f"<PaperModel(id={self.id}, source={self.source}, source_id={self.source_id})>"
+
+
+class UserModel(Base):
+    """SQLAlchemy model for storing user preferences."""
+
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    telegram_id: Mapped[int] = mapped_column(BigInteger, nullable=False, unique=True, index=True)
+    language: Mapped[str] = mapped_column(String(10), nullable=False, default="en")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.utcnow
+    )
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return f"<UserModel(telegram_id={self.telegram_id}, language={self.language})>"
+
