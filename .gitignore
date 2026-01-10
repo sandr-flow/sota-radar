@@ -38,3 +38,7 @@ logs/
 # OS
 .DS_Store
 Thumbs.db
+
+# Reports
+refactoring_analysis.md
+docs/implementation-plan.md

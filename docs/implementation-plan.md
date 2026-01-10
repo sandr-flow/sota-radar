@@ -122,17 +122,60 @@
 
 ---
 
-## Phase 6: Polish & Deploy
+## Phase 6: Refactoring & Infrastructure ✅
 
-### 6.1 Error Handling
-- [ ] Add retry logic for API calls
-- [ ] Add proper logging
-- [ ] Handle edge cases (empty responses, rate limits)
+> **Status:** Completed major refactoring to address technical debt
 
-### 6.2 Deployment
-- [ ] Create `Dockerfile`
-- [ ] Create `docker-compose.yml`
+### 6.1 Configuration & Settings ✅
+- [x] Centralized configuration using `pydantic-settings`
+- [x] Created `src/config/settings.py` with `Settings` class
+- [x] Environment variables properly typed and validated
+- [x] Removed hardcoded paths and credentials
+
+### 6.2 Database Optimization ✅
+- [x] Implemented Singleton pattern for SQLAlchemy Engine
+- [x] Fixed connection leak issue in `src/storage/database.py`
+- [x] Optimized `PaperRepository.add_many()` with bulk inserts
+- [x] Added `ON CONFLICT DO NOTHING` for efficient deduplication
+
+### 6.3 HTTP Client Infrastructure ✅
+- [x] Created `src/infrastructure/http_client.py` with singleton `AsyncClient`
+- [x] Refactored `MistralProvider` to use shared HTTP client
+- [x] Refactored `ArxivSource` to use shared HTTP client
+- [x] Added proper `close_client()` on bot shutdown
+
+### 6.4 Prompt Management ✅
+- [x] Extracted prompts to `config/prompts.yaml`
+- [x] Dynamic prompt loading in `MistralProvider`
+- [x] Bilingual summary prompt externalized
+
+### 6.5 Code Quality ✅
+- [x] Removed `sys.path` hacks from bot entry point
+- [x] Proper module imports throughout project
+- [x] Consistent docstring formatting (PEP 257)
+
+---
+
+## Phase 7: Polish & Deploy
+
+### 7.1 Error Handling
+- [ ] Add retry logic for API calls (LLM and arXiv)
+- [ ] Implement exponential backoff with `tenacity`
+- [ ] Handle edge cases (empty responses, rate limits, timeouts)
+- [ ] Add comprehensive logging with log levels
+
+### 7.2 UX Improvements
+- [ ] Add pagination for `/digest` command
+- [ ] Implement `/refresh` command for manual pipeline trigger
+- [ ] Consider Redis for `_summary_messages` persistence
+- [ ] Add statistics command (`/stats`)
+
+### 7.3 Deployment
+- [ ] Create `Dockerfile` for bot
+- [ ] Create `docker-compose.yml` with services
+- [ ] Add health check endpoints
 - [ ] Deploy to VPS/cloud
+- [ ] Set up monitoring and alerting
 
 ---
 
@@ -141,8 +184,26 @@
 | Question | Decision |
 |----------|----------|
 | arXiv categories | `cs.LG`, `cs.CL`, `cs.CV`, `cs.AI`, `cs.NE`, `cs.IR`, `stat.ML` |
-| Papers per digest | 10 |
+| Papers per digest | 10 (configurable via `PAPERS_PER_DIGEST`) |
 | Delivery mode | By command (`/digest`), no auto-schedule for MVP |
-| LLM Model | `mistral-large-latest` |
-| Rate limiting | 1 RPS (Mistral free tier) |
-| Payment provider | TBD (Phase 5) |
+| LLM Provider | Mistral (`mistral-large-latest`) |
+| Rate limiting | 1 RPS (Mistral free tier, managed via `aiolimiter`) |
+| Configuration | `pydantic-settings` with `.env` file |
+| Database | SQLite for MVP (easy migration to PostgreSQL) |
+| HTTP client | Shared `httpx.AsyncClient` singleton |
+| Prompts | Externalized to `config/prompts.yaml` |
+| Translation | Free for all users (integrated into pipeline) |
+
+---
+
+## Refactoring Summary (2026-01-10)
+
+**Critical Issues Resolved:**
+1. ✅ Database connection leaks (Engine singleton)
+2. ✅ N+1 query problem (bulk insert optimization)
+3. ✅ HTTP client inefficiency (shared AsyncClient)
+4. ✅ Hardcoded configuration (pydantic-settings)
+5. ✅ Hardcoded prompts (prompts.yaml)
+6. ✅ Import hacks (`sys.path` removed)
+
+**Reference:** See `refactoring_analysis.md` and `tech-debt.md` for details.
