@@ -31,6 +31,9 @@ build/
 *.db
 *.sqlite3
 
+# ChromaDB vector store
+data/chroma/
+
 # Logs
 *.log
 logs/
