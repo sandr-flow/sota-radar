@@ -108,7 +108,7 @@
 
 ---
 
-## Phase 5: Translation ✅
+## Phase 5: Summary Translation ✅
 
 > **Decision:** Translation integrated into core pipeline, not a paid feature.
 
