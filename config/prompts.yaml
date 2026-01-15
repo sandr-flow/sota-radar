@@ -16,3 +16,32 @@ prompts:
     
     Abstract:
     {text}
+
+  rag_essence: |
+    Based on the following excerpts from a research paper, answer briefly: What is the main idea and contribution of this paper?
+    
+    Context:
+    {context}
+    
+    Answer in 2-3 sentences maximum. Be specific and concise.
+    Return as JSON: {{"en": "English answer", "ru": "Russian answer"}}
+
+  rag_importance: |
+    Based on the following excerpts from a research paper, answer briefly: Why is this research important? What problem does it solve?
+    
+    Context:
+    {context}
+    
+    Answer in 2-3 sentences maximum. Focus on significance and impact.
+    Return as JSON: {{"en": "English answer", "ru": "Russian answer"}}
+
+  rag_applications: |
+    Based on the following excerpts from a research paper, answer briefly: Where can this research be applied in practice?
+    
+    Context:
+    {context}
+    
+    Answer in 2-3 sentences maximum. Give concrete examples if possible.
+    Return as JSON: {{"en": "English answer", "ru": "Russian answer"}}
+
+

@@ -28,6 +28,12 @@ class Settings(BaseSettings):
     MAX_RESULTS_PER_CATEGORY: int = 100
     PAPERS_PER_DIGEST: int = 10
     
+    # RAG / Vector Store
+    CHROMA_PERSIST_DIR: Path = DATA_DIR / "chroma"
+    EMBEDDING_MODEL: str = "all-mpnet-base-v2"
+    CHUNK_SIZE: int = 512
+    CHUNK_OVERLAP: int = 64
+    
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

@@ -25,6 +25,11 @@ STRINGS = {
         "no_papers": "No papers yet. Run the pipeline first!",
         "no_summary": "Summary not available yet.",
         "links": "🔗 Links:",
+        "deep_analysis_btn": "🔬 Deep Analysis",
+        "deep_analysis_loading": "🔬 Analyzing full paper...",
+        "q1_header": "💡 <b>What is the essence?</b> (1/3)",
+        "q2_header": "⭐ <b>Why is this important?</b> (2/3)",
+        "q3_header": "🛠 <b>Where can this be applied?</b> (3/3)",
     },
     "ru": {
         "welcome": "👋 Добро пожаловать в <b>sota-radar</b>!\n\nЯ доставляю AI/ML саммари статей с arXiv.\n\nВыберите язык:",
@@ -35,6 +40,11 @@ STRINGS = {
         "no_papers": "Статей пока нет. Запустите пайплайн!",
         "no_summary": "Саммари ещё не готово.",
         "links": "🔗 Ссылки:",
+        "deep_analysis_btn": "🔬 Глубокий анализ",
+        "deep_analysis_loading": "🔬 Анализирую полный текст статьи...",
+        "q1_header": "💡 <b>В чём суть?</b> (1/3)",
+        "q2_header": "⭐ <b>Почему это важно?</b> (2/3)",
+        "q3_header": "🛠 <b>Где применимо?</b> (3/3)",
     },
 }
 
@@ -203,6 +213,14 @@ async def callback_paper(callback: CallbackQuery):
         f"• <a href=\"{paper.pdf_url}\">PDF</a>"
     )
 
+    # Create Deep Analysis button
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(
+            text=get_text("deep_analysis_btn", lang),
+            callback_data=f"deep:{paper_id}"
+        )]
+    ])
+
     user_id = callback.from_user.id
     
     # Try to edit existing summary message, or send new one
@@ -214,6 +232,7 @@ async def callback_paper(callback: CallbackQuery):
                 message_id=_summary_messages[user_id],
                 parse_mode="HTML",
                 disable_web_page_preview=True,
+                reply_markup=keyboard,
             )
             return
         except Exception:
@@ -225,8 +244,84 @@ async def callback_paper(callback: CallbackQuery):
         response,
         parse_mode="HTML",
         disable_web_page_preview=True,
+        reply_markup=keyboard,
     )
     _summary_messages[user_id] = sent_message.message_id
+
+
+@router.callback_query(F.data.startswith("deep:"))
+async def callback_deep_analysis(callback: CallbackQuery):
+    """Handle Deep Analysis button - run RAG pipeline with 3 short messages."""
+    paper_id = int(callback.data.split(":")[1])
+    
+    init_db()
+    session = get_session()
+    user_repo = UserRepository(session)
+    repo = PaperRepository(session)
+    lang = user_repo.get_language(callback.from_user.id)
+    paper = repo.get_by_id(paper_id)
+    session.close()
+
+    if not paper:
+        await callback.answer("Paper not found", show_alert=True)
+        return
+
+    # Send loading message
+    await callback.answer(get_text("deep_analysis_loading", lang), show_alert=True)
+    
+    loading_msg = await callback.message.answer(
+        get_text("deep_analysis_loading", lang),
+        parse_mode="HTML",
+    )
+
+    try:
+        from src.rag import RAGPipeline
+        
+        rag = RAGPipeline()
+        title = html.escape(paper.title[:80])
+        
+        # Question headers
+        headers = [
+            get_text("q1_header", lang),
+            get_text("q2_header", lang),
+            get_text("q3_header", lang),
+        ]
+        
+        # Get answers for all 3 questions
+        answers = await rag.analyze_paper_questions(paper_id)
+        
+        # Delete loading message
+        await loading_msg.delete()
+        
+        # Send 3 separate messages
+        for i, (header, answer) in enumerate(zip(headers, answers)):
+            answer_text = answer.get(lang, answer.get("en", "No answer."))
+            answer_text = html.escape(answer_text)
+            
+            msg_content = f"{header}\n\n{answer_text}"
+            
+            # Add links only to last message
+            if i == 2:
+                msg_content += (
+                    f"\n\n{get_text('links', lang)}\n"
+                    f"• <a href=\"{paper.url}\">arXiv</a> "
+                    f"• <a href=\"{paper.pdf_url}\">PDF</a>"
+                )
+            
+            await callback.message.answer(
+                msg_content,
+                parse_mode="HTML",
+                disable_web_page_preview=True,
+            )
+        
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"Deep analysis failed: {e}", exc_info=True)
+        await loading_msg.edit_text(
+            f"❌ Analysis failed: {str(e)[:200]}",
+            parse_mode="HTML",
+        )
+
 
 
 def register_handlers(dp: Dispatcher):
