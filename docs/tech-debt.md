@@ -144,3 +144,76 @@ Bot uses `parse_mode="HTML"`. LLM summaries might contain Markdown which is curr
 
 **Solution:**  
 Switch to `parse_mode="MarkdownV2"` and ensure LLM output is properly escaped.
+
+---
+
+## TD-010: RAG Retry Logic & Error Handling
+
+**Priority:** Medium  
+**Impact:** Reliability  
+**Added:** 2026-01-15
+
+**Current state:**  
+RAG pipeline has no retry logic for PDF downloads or LLM calls. Single request failure = analysis failure.
+
+**Solution:**  
+Add exponential backoff retry with `tenacity` for:
+- PDF downloads (network errors, timeouts)
+- Mistral API calls (rate limits, 503 errors)
+
+---
+
+## TD-011: RAG Performance Optimization
+
+**Priority:** Medium  
+**Impact:** Response time, resource usage  
+**Added:** 2026-01-15
+
+**Current state:**  
+- Embedding model loads on first request (~5-10s cold start)
+- Each question in 3-question format is a separate LLM call (3x latency)
+- PDF text extraction not cached
+
+**Solutions:**  
+1. Pre-load embedding model on bot startup
+2. Batch 3 questions into single LLM call with structured output
+3. Cache extracted text in SQLite (`full_text` column in `papers` table)
+
+---
+
+## TD-012: RAG Query Refinement
+
+**Priority:** Low  
+**Impact:** Answer quality  
+**Added:** 2026-01-15
+
+**Current state:**  
+Uses paper title as query for chunk retrieval. May not retrieve most relevant chunks for specific questions.
+
+**Solution:**  
+Use question-specific queries for retrieval:
+- "essence" → query with "main contribution methodology"  
+- "importance" → query with "significance impact problem solving"
+- "applications" → query with "applications use cases practical"
+
+---
+
+## TD-013: RAG Quality Metrics
+
+**Priority:** Low  
+**Impact:** Observability, quality improvement  
+**Added:** 2026-01-15
+
+**Current state:**  
+No metrics to evaluate RAG retrieval quality or answer relevance.
+
+**Note:**  
+Data flow first, accuracy second. Ensure pipeline is stable before adding metrics.
+
+**Solution:**  
+1. Log retrieval distances (ChromaDB similarity scores)
+2. Track avg chunks per paper, avg chunk size
+3. Add optional user feedback (👍/👎) on analysis quality
+4. Consider offline evaluation with ground truth Q&A pairs
+
+

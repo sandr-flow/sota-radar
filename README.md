@@ -46,7 +46,15 @@ Staying up-to-date with the latest research in AI/ML requires reading dozens of 
 - Background summarization pipeline with rate limiting (1 RPS)
 - SQLite database with SQLAlchemy ORM
 
-✅ **Recent Refactoring (2026-01-10)**
+✅ **RAG Deep Analysis (2026-01-15)** 🆕
+- Full-text PDF extraction from arXiv papers
+- Semantic chunking with section/paragraph awareness
+- ChromaDB vector store (persistent storage)
+- Embeddings via `all-mpnet-base-v2` (768 dim)
+- 3-question analysis format: essence, importance, applications
+- "🔬 Deep Analysis" button in paper summaries
+
+✅ **Previous Refactoring (2026-01-10)**
 - Centralized configuration with `pydantic-settings`
 - Database Engine singleton (fixed connection leaks)
 - Shared HTTP client (AsyncClient singleton)
@@ -57,7 +65,7 @@ Staying up-to-date with the latest research in AI/ML requires reading dozens of 
 - Retry logic with exponential backoff for API calls
 - Pagination for digest browsing
 - Docker deployment
-- Redis for persistent message tracking
+- RAG improvements (caching, query refinement)
 
 ---
 
@@ -153,8 +161,9 @@ Open Telegram and find your bot by username (set via BotFather):
 1. Send `/start` → Select language (EN/RU)
 2. Wait for pipeline to fetch and summarize papers (~5 min)
 3. Send `/digest` → See list of papers as buttons
-4. Tap a paper title → View full bilingual summary
-5. Click links to read full paper on arXiv
+4. Tap a paper title → View bilingual summary
+5. Click "🔬 Deep Analysis" → Get 3-part AI analysis of full paper text
+6. Click links to read full paper on arXiv
 
 ---
 
@@ -205,14 +214,15 @@ sota-radar/
 │   ├── categories.yaml      # arXiv categories
 │   └── prompts.yaml         # LLM prompts
 ├── data/                    # Database and runtime data
-│   └── sota_radar.db        # SQLite database (auto-created)
+│   ├── sota_radar.db        # SQLite database (auto-created)
+│   └── chroma/              # ChromaDB vector store (auto-created)
 ├── docs/                    # Documentation
 │   ├── concept-design.md
-│   ├── implementation-plan.md
 │   └── tech-debt.md
 ├── scripts/                 # Utility scripts
 │   ├── test_arxiv.py
 │   ├── test_llm.py
+│   ├── test_rag.py          # RAG pipeline tests
 │   └── run_pipeline.py
 ├── src/                     # Source code
 │   ├── bot/                 # Telegram bot handlers
@@ -221,6 +231,7 @@ sota-radar/
 │   ├── llm/                 # LLM provider abstractions
 │   ├── models/              # Data models
 │   ├── pipeline/            # Background summarization
+│   ├── rag/                 # RAG pipeline (PDF, chunking, embeddings, ChromaDB)
 │   ├── sources/             # arXiv parser
 │   └── storage/             # Database models and repository
 ├── tests/                   # Unit tests
@@ -247,6 +258,7 @@ sota-radar/
 python scripts/test_arxiv.py
 python scripts/test_llm.py
 python scripts/test_storage.py
+python scripts/test_rag.py    # Test RAG pipeline
 
 # Run full pipeline manually
 python scripts/run_pipeline.py
