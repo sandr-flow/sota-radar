@@ -156,21 +156,138 @@
 
 ---
 
-## Phase 7: Polish & Deploy
+## Phase 7: RAG Deep Analysis ✅
 
-### 7.1 Error Handling
+> **Status:** Completed 2026-01-15
+
+### 7.1 PDF Extraction ✅
+- [x] Create `src/rag/pdf_extractor.py` — download and extract text from arXiv PDFs
+- [x] Handle redirects and in-memory processing
+
+### 7.2 Semantic Chunking ✅
+- [x] Create `src/rag/chunker.py` — split text into meaningful chunks
+- [x] Section/paragraph awareness with sentence overlap
+- [x] Configurable chunk size (default: 1000 chars)
+
+### 7.3 Vector Store ✅
+- [x] Create `src/rag/vector_store.py` — ChromaDB integration
+- [x] Persistent storage in `data/chroma/`
+- [x] Metadata filtering by paper ID
+
+### 7.4 Embeddings ✅
+- [x] Create `src/rag/embeddings.py` — sentence-transformers wrapper
+- [x] Model: `all-mpnet-base-v2` (768 dim)
+- [x] Lazy loading singleton pattern
+
+### 7.5 RAG Pipeline ✅
+- [x] Create `src/rag/rag_pipeline.py` — orchestration
+- [x] 3-question format: essence, importance, applications
+- [x] "🔬 Deep Analysis" button in Telegram
+
+---
+
+## Phase 8: HuggingFace Trending ✅
+
+> **Status:** Completed 2026-01-15
+
+### 8.1 HuggingFace Source ✅
+- [x] Create `src/sources/huggingface.py` — HF Daily Papers adapter
+- [x] Fetch trending papers with upvotes
+- [x] Filter by arXiv categories
+
+### 8.2 Command Split ✅
+- [x] `/digest` — trending from HuggingFace (sorted by upvotes)
+- [x] `/latest` — chronological from arXiv DB
+- [x] Upvotes displayed in button text (🔥42)
+
+### 8.3 Priority Queue ✅
+- [x] Create `src/pipeline/priority_queue.py`
+- [x] Papers clicked by users → priority summarization
+- [x] Background worker checks queue every 30s
+- [x] "Саммари формируется" message for pending papers
+
+---
+
+## Phase 9: Agent Dialog with RAG
+
+> **Status:** Planned
+
+### 9.1 Conversational RAG
+- [ ] Multi-turn dialog with paper context
+- [ ] User can ask follow-up questions
+- [ ] Maintain conversation history per user/paper
+
+### 9.2 Agent Architecture
+- [ ] Decide on agent framework (LangChain, custom)
+- [ ] Tool calling for chunk retrieval
+- [ ] Context window management
+
+### 9.3 Telegram Integration
+- [ ] `/chat <paper_id>` command or button
+- [ ] Session management (timeout, clear)
+- [ ] Handle long conversations gracefully
+
+---
+
+## Phase 10: Configurable Categories
+
+> **Status:** Planned
+
+### 10.1 Per-User Categories
+- [ ] Add `categories` column to `UserModel` (JSON array)
+- [ ] `/categories` command to view/edit preferences
+- [ ] Default: all categories
+
+### 10.2 Filtered Digest
+- [ ] `/digest` and `/latest` respect user categories
+- [ ] HuggingFace filtering uses user preferences
+- [ ] Show category badge in paper list
+
+### 10.3 Onboarding Flow
+- [ ] Ask for category preferences on `/start`
+- [ ] Inline keyboard with category toggles
+- [ ] "Select all" / "Clear" buttons
+
+---
+
+## Phase 11: Background Processing for Old Papers
+
+> **Status:** Planned
+
+### 11.1 RAG Indexing Worker
+- [ ] Background task to index papers without embeddings
+- [ ] Process N papers per run (configurable)
+- [ ] Track `indexed_at` timestamp in DB
+
+### 11.2 Backfill Strategy
+- [ ] Priority: papers with most user clicks
+- [ ] Secondary: chronological (newest first)
+- [ ] Skip papers older than X days (configurable)
+
+### 11.3 Storage Optimization
+- [ ] Cache extracted PDF text in DB (`full_text` column)
+- [ ] Avoid re-downloading PDFs
+- [ ] Prune old ChromaDB entries
+
+---
+
+## Phase 12: Polish & Deploy
+
+> **Status:** Planned
+
+### 12.1 Error Handling
 - [ ] Add retry logic for API calls (LLM and arXiv)
 - [ ] Implement exponential backoff with `tenacity`
 - [ ] Handle edge cases (empty responses, rate limits, timeouts)
 - [ ] Add comprehensive logging with log levels
 
-### 7.2 UX Improvements
+### 12.2 UX Improvements
 - [ ] Add pagination for `/digest` command
 - [ ] Implement `/refresh` command for manual pipeline trigger
 - [ ] Consider Redis for `_summary_messages` persistence
 - [ ] Add statistics command (`/stats`)
 
-### 7.3 Deployment
+### 12.3 Deployment
 - [ ] Create `Dockerfile` for bot
 - [ ] Create `docker-compose.yml` with services
 - [ ] Add health check endpoints
@@ -193,17 +310,19 @@
 | HTTP client | Shared `httpx.AsyncClient` singleton |
 | Prompts | Externalized to `config/prompts.yaml` |
 | Translation | Free for all users (integrated into pipeline) |
+| Trending source | HuggingFace Daily Papers API |
+| RAG embeddings | `all-mpnet-base-v2` via sentence-transformers |
+| Vector store | ChromaDB (persistent, local) |
 
 ---
 
-## Refactoring Summary (2026-01-10)
+## Completed Phases Summary
 
-**Critical Issues Resolved:**
-1. ✅ Database connection leaks (Engine singleton)
-2. ✅ N+1 query problem (bulk insert optimization)
-3. ✅ HTTP client inefficiency (shared AsyncClient)
-4. ✅ Hardcoded configuration (pydantic-settings)
-5. ✅ Hardcoded prompts (prompts.yaml)
-6. ✅ Import hacks (`sys.path` removed)
+| Phase | Name | Date |
+|-------|------|------|
+| 0-6 | Core MVP + Refactoring | 2026-01-10 |
+| 7 | RAG Deep Analysis | 2026-01-15 |
+| 8 | HuggingFace Trending | 2026-01-15 |
 
-**Reference:** See `refactoring_analysis.md` and `tech-debt.md` for details.
+**Reference:** See `tech-debt.md` for known issues and future improvements.
+
