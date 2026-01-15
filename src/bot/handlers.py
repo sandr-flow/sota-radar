@@ -19,10 +19,12 @@ STRINGS = {
     "en": {
         "welcome": "👋 Welcome to <b>sota-radar</b>!\n\nI deliver AI/ML paper summaries from arXiv.\n\nSelect your language:",
         "lang_set": "✅ Language set to English",
-        "onboarding": "🤖 <b>How to use sota-radar:</b>\n\n📰 /digest — Browse latest AI/ML papers\n   Tap any paper to see its summary\n\n🌐 /language — Change language\n\n📚 /help — Full command list\n\n<i>Papers are updated every 5 minutes from arXiv.</i>",
-        "help": "📚 <b>sota-radar help</b>\n\n/digest - Show recent papers with AI summaries\n/language - Change language\n/start - Welcome message\n/help - This message\n\nPapers are fetched from arXiv categories:\ncs.LG, cs.CL, cs.CV, cs.AI, cs.NE, cs.IR, stat.ML",
-        "digest_header": "📰 <b>Latest Papers</b>\n\nTap a paper to see summary:",
+        "onboarding": "🤖 <b>How to use sota-radar:</b>\n\n🔥 /digest — Trending papers (from HuggingFace)\n📰 /latest — Most recent papers\n   Tap any paper to see its summary\n\n🌐 /language — Change language\n\n📚 /help — Full command list\n\n<i>Papers are updated every 5 minutes from arXiv.</i>",
+        "help": "📚 <b>sota-radar help</b>\n\n/digest - Trending papers (HuggingFace Daily)\n/latest - Most recent papers from arXiv\n/language - Change language\n/start - Welcome message\n/help - This message\n\nTracked arXiv categories:\ncs.LG, cs.CL, cs.CV, cs.AI, cs.NE, cs.IR, stat.ML",
+        "digest_header": "🔥 <b>Trending Papers</b>\n\nFrom HuggingFace Daily Papers:",
+        "latest_header": "📰 <b>Latest Papers</b>\n\nMost recent from arXiv:",
         "no_papers": "No papers yet. Run the pipeline first!",
+        "no_trending": "No trending papers found. Try /latest for recent papers.",
         "no_summary": "Summary not available yet.",
         "links": "🔗 Links:",
         "deep_analysis_btn": "🔬 Deep Analysis",
@@ -30,14 +32,19 @@ STRINGS = {
         "q1_header": "💡 <b>What is the essence?</b> (1/3)",
         "q2_header": "⭐ <b>Why is this important?</b> (2/3)",
         "q3_header": "🛠 <b>Where can this be applied?</b> (3/3)",
+        "loading_trending": "🔄 Loading trending papers...",
+        "summary_pending": "⏳ Summary is being generated. Try again in a minute.",
     },
+
     "ru": {
         "welcome": "👋 Добро пожаловать в <b>sota-radar</b>!\n\nЯ доставляю AI/ML саммари статей с arXiv.\n\nВыберите язык:",
         "lang_set": "✅ Язык установлен: Русский",
-        "onboarding": "🤖 <b>Как пользоваться sota-radar:</b>\n\n📰 /digest — Смотреть последние AI/ML статьи\n   Нажмите на статью для просмотра саммари\n\n🌐 /language — Сменить язык\n\n📚 /help — Полный список команд\n\n<i>Статьи обновляются каждые 5 минут с arXiv.</i>",
-        "help": "📚 <b>Справка sota-radar</b>\n\n/digest - Показать последние статьи с AI-саммари\n/language - Изменить язык\n/start - Приветствие\n/help - Эта справка\n\nСтатьи из категорий arXiv:\ncs.LG, cs.CL, cs.CV, cs.AI, cs.NE, cs.IR, stat.ML",
-        "digest_header": "📰 <b>Последние статьи</b>\n\nНажмите на статью для просмотра саммари:",
+        "onboarding": "🤖 <b>Как пользоваться sota-radar:</b>\n\n🔥 /digest — Трендовые статьи (HuggingFace)\n📰 /latest — Последние статьи\n   Нажмите на статью для просмотра саммари\n\n🌐 /language — Сменить язык\n\n📚 /help — Полный список команд\n\n<i>Статьи обновляются каждые 5 минут с arXiv.</i>",
+        "help": "📚 <b>Справка sota-radar</b>\n\n/digest - Трендовые статьи (HuggingFace Daily)\n/latest - Последние статьи с arXiv\n/language - Изменить язык\n/start - Приветствие\n/help - Эта справка\n\nКатегории arXiv:\ncs.LG, cs.CL, cs.CV, cs.AI, cs.NE, cs.IR, stat.ML",
+        "digest_header": "🔥 <b>Трендовые статьи</b>\n\nИз HuggingFace Daily Papers:",
+        "latest_header": "📰 <b>Последние статьи</b>\n\nСамые свежие с arXiv:",
         "no_papers": "Статей пока нет. Запустите пайплайн!",
+        "no_trending": "Трендовых статей не найдено. Попробуйте /latest.",
         "no_summary": "Саммари ещё не готово.",
         "links": "🔗 Ссылки:",
         "deep_analysis_btn": "🔬 Глубокий анализ",
@@ -45,8 +52,11 @@ STRINGS = {
         "q1_header": "💡 <b>В чём суть?</b> (1/3)",
         "q2_header": "⭐ <b>Почему это важно?</b> (2/3)",
         "q3_header": "🛠 <b>Где применимо?</b> (3/3)",
+        "loading_trending": "🔄 Загружаю трендовые статьи...",
+        "summary_pending": "⏳ Саммари формируется. Попробуйте через минуту.",
     },
 }
+
 
 
 def get_text(key: str, lang: str) -> str:
@@ -136,7 +146,55 @@ async def cmd_help(message: Message):
 
 @router.message(Command("digest"))
 async def cmd_digest(message: Message):
-    """Handle /digest command - show papers as inline buttons."""
+    """Handle /digest command - show trending papers from HuggingFace."""
+    init_db()
+    session = get_session()
+    user_repo = UserRepository(session)
+    lang = user_repo.get_language(message.from_user.id)
+    session.close()
+
+    # Send loading message
+    loading_msg = await message.answer(
+        get_text("loading_trending", lang),
+        parse_mode="HTML",
+    )
+
+    # Fetch trending papers from HuggingFace
+    from src.sources.huggingface import HuggingFaceSource
+    
+    hf_source = HuggingFaceSource()
+    papers = await hf_source.fetch_filtered_papers(limit=10)
+
+    if not papers:
+        await loading_msg.edit_text(get_text("no_trending", lang))
+        return
+
+    # Build inline keyboard with paper titles
+    buttons = []
+    for paper in papers:
+        title = paper.title[:55] + "..." if len(paper.title) > 55 else paper.title
+        # Add upvotes indicator
+        upvotes_str = f"🔥{paper.upvotes}" if paper.upvotes > 0 else ""
+        display_title = f"{upvotes_str} {title}".strip()
+        buttons.append([
+            InlineKeyboardButton(
+                text=display_title[:60],
+                callback_data=f"hf:{paper.arxiv_id}",
+            )
+        ])
+
+    keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
+    
+    await loading_msg.edit_text(
+        get_text("digest_header", lang),
+        parse_mode="HTML",
+        reply_markup=keyboard,
+    )
+
+
+@router.message(Command("latest"))
+async def cmd_latest(message: Message):
+    """Handle /latest command - show recent papers from DB."""
     init_db()
     session = get_session()
     repo = PaperRepository(session)
@@ -165,10 +223,11 @@ async def cmd_digest(message: Message):
     keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
     
     await message.answer(
-        get_text("digest_header", lang),
+        get_text("latest_header", lang),
         parse_mode="HTML",
         reply_markup=keyboard,
     )
+
 
 
 @router.callback_query(F.data.startswith("paper:"))
@@ -198,28 +257,41 @@ async def callback_paper(callback: CallbackQuery):
             summary = summaries.get(lang, summaries.get("en", get_text("no_summary", lang)))
         except json.JSONDecodeError:
             summary = paper.summary_json  # Fallback for old plain text
+        
+        # Build response
+        title = html.escape(paper.title)
+        summary = html.escape(summary)  # Escape to ensure plain text display
+        
+        response = (
+            f"<b>{title}</b>\n\n"
+            f"📝 {summary}\n\n"
+            f"{get_text('links', lang)}\n"
+            f"• <a href=\"{paper.url}\">arXiv</a>\n"
+            f"• <a href=\"{paper.pdf_url}\">PDF</a>"
+        )
+
+        # Create Deep Analysis button
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(
+                text=get_text("deep_analysis_btn", lang),
+                callback_data=f"deep:{paper_id}"
+            )]
+        ])
     else:
-        summary = get_text("no_summary", lang)
+        # No summary yet - add to priority queue
+        from src.pipeline.priority_queue import add_to_priority_queue
+        add_to_priority_queue(paper.id)
+        
+        title = html.escape(paper.title)
+        response = (
+            f"<b>{title}</b>\n\n"
+            f"{get_text('summary_pending', lang)}\n\n"
+            f"{get_text('links', lang)}\n"
+            f"• <a href=\"{paper.url}\">arXiv</a>\n"
+            f"• <a href=\"{paper.pdf_url}\">PDF</a>"
+        )
+        keyboard = None
 
-    # Build response
-    title = html.escape(paper.title)
-    summary = html.escape(summary)  # Escape to ensure plain text display
-    
-    response = (
-        f"<b>{title}</b>\n\n"
-        f"📝 {summary}\n\n"
-        f"{get_text('links', lang)}\n"
-        f"• <a href=\"{paper.url}\">arXiv</a>\n"
-        f"• <a href=\"{paper.pdf_url}\">PDF</a>"
-    )
-
-    # Create Deep Analysis button
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(
-            text=get_text("deep_analysis_btn", lang),
-            callback_data=f"deep:{paper_id}"
-        )]
-    ])
 
     user_id = callback.from_user.id
     
@@ -248,6 +320,112 @@ async def callback_paper(callback: CallbackQuery):
     )
     _summary_messages[user_id] = sent_message.message_id
 
+
+@router.callback_query(F.data.startswith("hf:"))
+async def callback_hf_paper(callback: CallbackQuery):
+    """Handle HuggingFace paper selection - show paper info by arXiv ID."""
+    arxiv_id = callback.data.split(":")[1]
+    
+    init_db()
+    session = get_session()
+    user_repo = UserRepository(session)
+    lang = user_repo.get_language(callback.from_user.id)
+    
+    # Try to find paper in DB by arXiv ID
+    from sqlalchemy import select
+    from src.storage.models import PaperModel
+    from src.pipeline.priority_queue import add_to_priority_queue, is_in_queue
+    
+    stmt = select(PaperModel).where(
+        PaperModel.source == "arxiv",
+        PaperModel.source_id.like(f"{arxiv_id}%")
+    )
+    paper = session.execute(stmt).scalar_one_or_none()
+    session.close()
+
+    await callback.answer()
+
+    if paper:
+        # Paper is in DB
+        if paper.summary_json:
+            # Has summary - show it
+            try:
+                summaries = json.loads(paper.summary_json)
+                summary = summaries.get(lang, summaries.get("en", get_text("no_summary", lang)))
+            except json.JSONDecodeError:
+                summary = paper.summary_json
+            
+            title = html.escape(paper.title)
+            summary = html.escape(summary)
+            
+            response = (
+                f"<b>{title}</b>\n\n"
+                f"📝 {summary}\n\n"
+                f"{get_text('links', lang)}\n"
+                f"• <a href=\"{paper.url}\">arXiv</a>\n"
+                f"• <a href=\"{paper.pdf_url}\">PDF</a>"
+            )
+
+            # Create Deep Analysis button
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(
+                    text=get_text("deep_analysis_btn", lang),
+                    callback_data=f"deep:{paper.id}"
+                )]
+            ])
+        else:
+            # No summary yet - add to priority queue
+            add_to_priority_queue(paper.id)
+            
+            title = html.escape(paper.title)
+            response = (
+                f"<b>{title}</b>\n\n"
+                f"{get_text('summary_pending', lang)}\n\n"
+                f"{get_text('links', lang)}\n"
+                f"• <a href=\"{paper.url}\">arXiv</a>\n"
+                f"• <a href=\"{paper.pdf_url}\">PDF</a>"
+            )
+            keyboard = None
+    else:
+        # Paper not in DB, show basic info with links only
+        url = f"https://arxiv.org/abs/{arxiv_id}"
+        pdf_url = f"https://arxiv.org/pdf/{arxiv_id}.pdf"
+        
+        response = (
+            f"📄 <b>arXiv:{arxiv_id}</b>\n\n"
+            f"{get_text('no_summary', lang)}\n\n"
+            f"{get_text('links', lang)}\n"
+            f"• <a href=\"{url}\">arXiv</a>\n"
+            f"• <a href=\"{pdf_url}\">PDF</a>"
+        )
+        keyboard = None
+
+
+    user_id = callback.from_user.id
+    
+    # Try to edit existing summary message, or send new one
+    if user_id in _summary_messages:
+        try:
+            await callback.bot.edit_message_text(
+                response,
+                chat_id=callback.message.chat.id,
+                message_id=_summary_messages[user_id],
+                parse_mode="HTML",
+                disable_web_page_preview=True,
+                reply_markup=keyboard,
+            )
+            return
+        except Exception:
+            pass
+    
+    # Send new summary message and track its ID
+    sent_message = await callback.message.answer(
+        response,
+        parse_mode="HTML",
+        disable_web_page_preview=True,
+        reply_markup=keyboard,
+    )
+    _summary_messages[user_id] = sent_message.message_id
 
 @router.callback_query(F.data.startswith("deep:"))
 async def callback_deep_analysis(callback: CallbackQuery):

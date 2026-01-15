@@ -15,9 +15,20 @@ async def background_pipeline():
     """Run summarization pipeline periodically in background.
     
     Runs immediately on startup, then every PIPELINE_INTERVAL_MINUTES.
+    Priority queue is checked more frequently.
     """
+    from src.pipeline.priority_queue import process_priority_queue, queue_size
+    
     while True:
         try:
+            # First, process priority queue (user-requested papers)
+            if queue_size() > 0:
+                logger.info(f"🔥 Processing priority queue ({queue_size()} papers)...")
+                p_success, p_errors = await process_priority_queue()
+                if p_success > 0 or p_errors > 0:
+                    logger.info(f"🔥 Priority queue: {p_success} success, {p_errors} errors")
+            
+            # Then run regular pipeline
             logger.info("🚀 Starting background pipeline run...")
             stats = await run_full_pipeline()
             logger.info(
@@ -29,7 +40,17 @@ async def background_pipeline():
         except Exception as e:
             logger.error(f"❌ Pipeline error: {e}", exc_info=True)
         
-        await asyncio.sleep(settings.PIPELINE_INTERVAL_MINUTES * 60)
+        # Check priority queue more often (every 30 seconds)
+        # but only run full pipeline every PIPELINE_INTERVAL_MINUTES
+        for _ in range(settings.PIPELINE_INTERVAL_MINUTES * 2):
+            await asyncio.sleep(30)
+            # Process priority queue if any
+            if queue_size() > 0:
+                logger.info(f"🔥 Processing priority queue ({queue_size()} papers)...")
+                p_success, p_errors = await process_priority_queue()
+                if p_success > 0 or p_errors > 0:
+                    logger.info(f"🔥 Priority queue: {p_success} success, {p_errors} errors")
+
 
 
 async def summarize_papers(batch_size: int = 10) -> tuple[int, int]:
