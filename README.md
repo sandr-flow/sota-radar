@@ -41,18 +41,26 @@ Staying up-to-date with the latest research in AI/ML requires reading dozens of 
 ✅ **Core Functionality (MVP Complete)**
 - arXiv paper parsing with deduplication
 - Bilingual summarization (EN/RU) via Mistral API
-- Telegram bot with `/start`, `/digest`, `/language` commands
+- Telegram bot with `/start`, `/digest`, `/latest`, `/language` commands
 - User preference storage (language selection)
 - Background summarization pipeline with rate limiting (1 RPS)
 - SQLite database with SQLAlchemy ORM
 
-✅ **RAG Deep Analysis (2026-01-15)** 🆕
+✅ **HuggingFace Trending (2026-01-15)** 🆕
+- `/digest` shows trending papers from HuggingFace Daily Papers
+- `/latest` shows chronologically newest from arXiv
+- Priority summarization queue for on-demand processing
+- Papers requested by users are summarized first (every 30s)
+- arXiv category filtering for HF papers
+
+✅ **RAG Deep Analysis (2026-01-15)**
 - Full-text PDF extraction from arXiv papers
 - Semantic chunking with section/paragraph awareness
 - ChromaDB vector store (persistent storage)
 - Embeddings via `all-mpnet-base-v2` (768 dim)
 - 3-question analysis format: essence, importance, applications
 - "🔬 Deep Analysis" button in paper summaries
+
 
 ✅ **Previous Refactoring (2026-01-10)**
 - Centralized configuration with `pydantic-settings`
@@ -153,8 +161,10 @@ Open Telegram and find your bot by username (set via BotFather):
 |---------|-------------|
 | `/start` | Initialize bot and select language (🇬🇧 English / 🇷🇺 Russian) |
 | `/language` | Change your preferred language |
-| `/digest` | Show latest 10 papers with summaries |
+| `/digest` | 🔥 Show trending papers from HuggingFace Daily Papers |
+| `/latest` | 📰 Show 10 most recent papers from arXiv |
 | `/help` | Display available commands |
+
 
 **Example Workflow:**
 
@@ -230,10 +240,11 @@ sota-radar/
 │   ├── infrastructure/      # Shared HTTP client
 │   ├── llm/                 # LLM provider abstractions
 │   ├── models/              # Data models
-│   ├── pipeline/            # Background summarization
+│   ├── pipeline/            # Background summarization + priority queue
 │   ├── rag/                 # RAG pipeline (PDF, chunking, embeddings, ChromaDB)
-│   ├── sources/             # arXiv parser
+│   ├── sources/             # arXiv + HuggingFace parsers
 │   └── storage/             # Database models and repository
+
 ├── tests/                   # Unit tests
 ├── .env.example             # Environment template
 ├── requirements.txt         # Python dependencies

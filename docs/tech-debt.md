@@ -102,22 +102,18 @@ Implement signal handlers for SIGINT/SIGTERM to close sessions and polling clean
 
 ---
 
-## TD-007: User Tracking
+## TD-007: User Tracking ✅ RESOLVED
 
 **Priority:** Low  
 **Impact:** Personalization  
-**Added:** 2026-01-09
+**Added:** 2026-01-09  
+**Resolved:** 2026-01-15
 
-**Current state:**  
-Bot is stateless regarding users. Doesn't track who is using it.
-
-**When to fix:**  
-When complying with Phase 5 (paid translations) or multi-user preferences.
-
-**Solution:**  
-Add `users` table to DB. Capture `user_id` on /start.
+**Solution implemented:**  
+Added `UserModel` and `UserRepository` in `src/storage/`. Users table tracks `user_id` and `language` preference. Language is captured on /start and stored persistently.
 
 ---
+
 
 ## TD-008: Pagination
 
@@ -216,4 +212,34 @@ Data flow first, accuracy second. Ensure pipeline is stable before adding metric
 3. Add optional user feedback (👍/👎) on analysis quality
 4. Consider offline evaluation with ground truth Q&A pairs
 
+---
 
+## TD-014: HuggingFace API Rate Limiting
+
+**Priority:** Low  
+**Impact:** Reliability  
+**Added:** 2026-01-15
+
+**Current state:**  
+HuggingFace Daily Papers API calls are not rate-limited. No retry logic on failures.
+
+**Solution:**  
+1. Add rate limiter for HF API calls
+2. Implement retry with exponential backoff
+3. Consider caching daily papers for 1 hour to reduce API calls
+
+---
+
+## TD-015: Priority Queue Persistence
+
+**Priority:** Low  
+**Impact:** Reliability  
+**Added:** 2026-01-15
+
+**Current state:**  
+Priority summarization queue is in-memory (lost on restart).
+
+**Solution:**  
+1. Store queue in SQLite or Redis
+2. Add `priority_requested` column to papers table
+3. Process papers with `priority_requested=True` first on restart
