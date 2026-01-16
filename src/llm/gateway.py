@@ -1,7 +1,6 @@
 """LLM Gateway factory for provider selection."""
 
-import os
-
+from src.config.settings import settings
 from src.llm.base import BaseLLMProvider
 from src.llm.mistral import MistralProvider
 
@@ -10,7 +9,7 @@ def get_provider(provider_name: str | None = None) -> BaseLLMProvider:
     """Get LLM provider by name.
 
     Args:
-        provider_name: Provider identifier. Defaults to LLM_PROVIDER env var.
+        provider_name: Provider identifier. Defaults to settings.LLM_PROVIDER.
 
     Returns:
         Configured LLM provider instance.
@@ -19,7 +18,7 @@ def get_provider(provider_name: str | None = None) -> BaseLLMProvider:
         ValueError: If provider is not supported.
     """
     if provider_name is None:
-        provider_name = os.getenv("LLM_PROVIDER", "mistral")
+        provider_name = settings.LLM_PROVIDER
 
     providers = {
         "mistral": MistralProvider,

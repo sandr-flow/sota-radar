@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     
     # Pipeline
     PIPELINE_INTERVAL_MINUTES: int = 5
+    PRIORITY_QUEUE_CHECK_INTERVAL: int = 30  # seconds
     MAX_RESULTS_PER_CATEGORY: int = 100
     PAPERS_PER_DIGEST: int = 10
     

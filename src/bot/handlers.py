@@ -22,6 +22,11 @@ router = Router()
 # Format: {user_id: message_id}
 _summary_messages: dict[int, int] = {}
 
+# UI constants for text truncation
+TITLE_MAX_LENGTH = 55
+BUTTON_MAX_LENGTH = 60
+TITLE_DISPLAY_LENGTH = 80
+
 # Load localization strings from YAML
 def _load_strings() -> dict[str, dict[str, str]]:
     """Load localization strings from config/strings.yaml."""
@@ -99,12 +104,19 @@ async def callback_language(callback: CallbackQuery):
 @router.message(Command("help"))
 async def cmd_help(message: Message):
     """Handle /help command."""
+    from src.config import load_config
+
     with session_scope() as session:
         user_repo = UserRepository(session)
         lang = user_repo.get_language(message.from_user.id)
 
+    # Load categories dynamically
+    config = load_config()
+    categories_str = ", ".join(c.id for c in config.categories)
+    help_text = get_text("help", lang).format(categories=categories_str)
+
     await message.answer(
-        get_text("help", lang),
+        help_text,
         parse_mode="HTML",
     )
 
@@ -133,13 +145,13 @@ async def cmd_digest(message: Message):
     # Build inline keyboard with paper titles
     buttons = []
     for paper in papers:
-        title = paper.title[:55] + "..." if len(paper.title) > 55 else paper.title
+        title = paper.title[:TITLE_MAX_LENGTH] + "..." if len(paper.title) > TITLE_MAX_LENGTH else paper.title
         # Add upvotes indicator
         upvotes_str = f"🔥{paper.upvotes}" if paper.upvotes > 0 else ""
         display_title = f"{upvotes_str} {title}".strip()
         buttons.append([
             InlineKeyboardButton(
-                text=display_title[:60],
+                text=display_title[:BUTTON_MAX_LENGTH],
                 callback_data=f"hf:{paper.arxiv_id}",
             )
         ])
@@ -177,7 +189,7 @@ async def cmd_latest(message: Message):
     # Build inline keyboard with paper titles
     buttons = []
     for paper in papers_data:
-        title = paper["title"][:60] + "..." if len(paper["title"]) > 60 else paper["title"]
+        title = paper["title"][:BUTTON_MAX_LENGTH] + "..." if len(paper["title"]) > BUTTON_MAX_LENGTH else paper["title"]
         buttons.append([
             InlineKeyboardButton(
                 text=title,
@@ -440,7 +452,7 @@ async def callback_deep_analysis(callback: CallbackQuery):
 
     try:
         rag = RAGPipeline()
-        title = html.escape(paper_data["title"][:80])
+        title = html.escape(paper_data["title"][:TITLE_DISPLAY_LENGTH])
         
         # Question headers
         headers = [

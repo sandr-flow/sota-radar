@@ -42,10 +42,12 @@ async def background_pipeline():
         except Exception as e:
             logger.error(f"❌ Pipeline error: {e}", exc_info=True)
         
-        # Check priority queue more often (every 30 seconds)
+        # Check priority queue more often
         # but only run full pipeline every PIPELINE_INTERVAL_MINUTES
-        for _ in range(settings.PIPELINE_INTERVAL_MINUTES * 2):
-            await asyncio.sleep(30)
+        interval = settings.PRIORITY_QUEUE_CHECK_INTERVAL
+        iterations = (settings.PIPELINE_INTERVAL_MINUTES * 60) // interval
+        for _ in range(iterations):
+            await asyncio.sleep(interval)
             # Process priority queue if any
             if queue_size() > 0:
                 logger.info(f"🔥 Processing priority queue ({queue_size()} papers)...")

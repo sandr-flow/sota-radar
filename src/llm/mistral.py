@@ -11,9 +11,6 @@ from src.infrastructure.http_client import get_client
 from src.llm.base import BaseLLMProvider
 from src.llm.rate_limiter import MISTRAL_RATE_LIMITER
 
-# Mistral API configuration
-MISTRAL_API_URL = "https://api.mistral.ai/v1/chat/completions"
-
 
 class MistralProvider(BaseLLMProvider):
     """Mistral AI provider implementation.
@@ -75,7 +72,7 @@ class MistralProvider(BaseLLMProvider):
 
         client = get_client()
         response = await client.post(
-            MISTRAL_API_URL,
+            settings.MISTRAL_API_URL,
             headers=headers,
             json=payload,
             timeout=60.0,
