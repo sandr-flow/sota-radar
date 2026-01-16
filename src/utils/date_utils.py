@@ -10,10 +10,11 @@ def parse_iso_date(date_str: str | None) -> datetime:
         date_str: ISO date string (e.g. "2023-01-01T12:00:00Z").
         
     Returns:
-        Naive datetime object in UTC. Returns current UTC time if input is invalid.
+        Naive datetime object in UTC. Returns datetime.min if input is invalid,
+        so papers with missing dates sort last (oldest) rather than newest.
     """
     if not date_str:
-        return datetime.now(timezone.utc).replace(tzinfo=None)
+        return datetime.min
     
     try:
         # Handle Z suffix
@@ -21,4 +22,5 @@ def parse_iso_date(date_str: str | None) -> datetime:
         # Convert to UTC and remove timezone info (for SQLite compatibility)
         return dt.astimezone(timezone.utc).replace(tzinfo=None)
     except ValueError:
-        return datetime.now(timezone.utc).replace(tzinfo=None)
+        return datetime.min
+
