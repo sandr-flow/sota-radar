@@ -1,6 +1,6 @@
 """SQLAlchemy models for sota-radar storage."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import BigInteger, DateTime, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -36,7 +36,7 @@ class PaperModel(Base):
     
     # Metadata
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, default=datetime.utcnow
+        DateTime, nullable=False, default=lambda: datetime.now(timezone.utc)
     )
 
     __table_args__ = (
@@ -58,7 +58,7 @@ class UserModel(Base):
     telegram_id: Mapped[int] = mapped_column(BigInteger, nullable=False, unique=True, index=True)
     language: Mapped[str] = mapped_column(String(10), nullable=False, default="en")
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, default=datetime.utcnow
+        DateTime, nullable=False, default=lambda: datetime.now(timezone.utc)
     )
 
     def __repr__(self) -> str:
