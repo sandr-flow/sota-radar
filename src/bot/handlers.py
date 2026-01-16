@@ -6,7 +6,7 @@ from aiogram import Dispatcher, F, Router
 from aiogram.filters import Command
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
-from src.storage import get_session, init_db, PaperRepository, UserRepository
+from src.storage import session_scope, PaperRepository, UserRepository
 
 router = Router()
 
@@ -77,11 +77,9 @@ def get_language_keyboard() -> InlineKeyboardMarkup:
 @router.message(Command("start"))
 async def cmd_start(message: Message):
     """Handle /start command with language selection."""
-    init_db()
-    session = get_session()
-    user_repo = UserRepository(session)
-    lang = user_repo.get_language(message.from_user.id)
-    session.close()
+    with session_scope() as session:
+        user_repo = UserRepository(session)
+        lang = user_repo.get_language(message.from_user.id)
 
     await message.answer(
         get_text("welcome", lang),
@@ -93,11 +91,9 @@ async def cmd_start(message: Message):
 @router.message(Command("language"))
 async def cmd_language(message: Message):
     """Handle /language command."""
-    init_db()
-    session = get_session()
-    user_repo = UserRepository(session)
-    lang = user_repo.get_language(message.from_user.id)
-    session.close()
+    with session_scope() as session:
+        user_repo = UserRepository(session)
+        lang = user_repo.get_language(message.from_user.id)
 
     await message.answer(
         get_text("welcome", lang),
@@ -111,11 +107,9 @@ async def callback_language(callback: CallbackQuery):
     """Handle language selection callback."""
     lang = callback.data.split(":")[1]
     
-    init_db()
-    session = get_session()
-    user_repo = UserRepository(session)
-    user_repo.set_language(callback.from_user.id, lang)
-    session.close()
+    with session_scope() as session:
+        user_repo = UserRepository(session)
+        user_repo.set_language(callback.from_user.id, lang)
 
     await callback.answer()
     await callback.message.edit_text(
@@ -132,11 +126,9 @@ async def callback_language(callback: CallbackQuery):
 @router.message(Command("help"))
 async def cmd_help(message: Message):
     """Handle /help command."""
-    init_db()
-    session = get_session()
-    user_repo = UserRepository(session)
-    lang = user_repo.get_language(message.from_user.id)
-    session.close()
+    with session_scope() as session:
+        user_repo = UserRepository(session)
+        lang = user_repo.get_language(message.from_user.id)
 
     await message.answer(
         get_text("help", lang),
@@ -147,11 +139,9 @@ async def cmd_help(message: Message):
 @router.message(Command("digest"))
 async def cmd_digest(message: Message):
     """Handle /digest command - show trending papers from HuggingFace."""
-    init_db()
-    session = get_session()
-    user_repo = UserRepository(session)
-    lang = user_repo.get_language(message.from_user.id)
-    session.close()
+    with session_scope() as session:
+        user_repo = UserRepository(session)
+        lang = user_repo.get_language(message.from_user.id)
 
     # Send loading message
     loading_msg = await message.answer(
@@ -195,15 +185,12 @@ async def cmd_digest(message: Message):
 @router.message(Command("latest"))
 async def cmd_latest(message: Message):
     """Handle /latest command - show recent papers from DB."""
-    init_db()
-    session = get_session()
-    repo = PaperRepository(session)
-    user_repo = UserRepository(session)
-    lang = user_repo.get_language(message.from_user.id)
-
-    # Get recent papers
-    papers = repo.get_recent(limit=10)
-    session.close()
+    with session_scope() as session:
+        repo = PaperRepository(session)
+        user_repo = UserRepository(session)
+        lang = user_repo.get_language(message.from_user.id)
+        # Get recent papers
+        papers = repo.get_recent(limit=10)
 
     if not papers:
         await message.answer(get_text("no_papers", lang))
@@ -235,14 +222,11 @@ async def callback_paper(callback: CallbackQuery):
     """Handle paper selection callback - show full summary."""
     paper_id = int(callback.data.split(":")[1])
     
-    init_db()
-    session = get_session()
-    repo = PaperRepository(session)
-    user_repo = UserRepository(session)
-    lang = user_repo.get_language(callback.from_user.id)
-    
-    paper = repo.get_by_id(paper_id)
-    session.close()
+    with session_scope() as session:
+        repo = PaperRepository(session)
+        user_repo = UserRepository(session)
+        lang = user_repo.get_language(callback.from_user.id)
+        paper = repo.get_by_id(paper_id)
 
     if not paper:
         await callback.answer("Paper not found", show_alert=True)
@@ -326,64 +310,74 @@ async def callback_hf_paper(callback: CallbackQuery):
     """Handle HuggingFace paper selection - show paper info by arXiv ID."""
     arxiv_id = callback.data.split(":")[1]
     
-    init_db()
-    session = get_session()
-    user_repo = UserRepository(session)
-    lang = user_repo.get_language(callback.from_user.id)
-    
-    # Try to find paper in DB by arXiv ID
+    # Import here to avoid circular imports
     from sqlalchemy import select
     from src.storage.models import PaperModel
     from src.pipeline.priority_queue import add_to_priority_queue, is_in_queue
     
-    stmt = select(PaperModel).where(
-        PaperModel.source == "arxiv",
-        PaperModel.source_id.like(f"{arxiv_id}%")
-    )
-    paper = session.execute(stmt).scalar_one_or_none()
-    session.close()
+    # Extract paper data inside session scope to avoid DetachedInstanceError
+    paper_data = None
+    with session_scope() as session:
+        user_repo = UserRepository(session)
+        lang = user_repo.get_language(callback.from_user.id)
+        
+        # Try to find paper in DB by arXiv ID
+        stmt = select(PaperModel).where(
+            PaperModel.source == "arxiv",
+            PaperModel.source_id.like(f"{arxiv_id}%")
+        )
+        paper = session.execute(stmt).scalars().first()
+        
+        if paper:
+            paper_data = {
+                "id": paper.id,
+                "title": paper.title,
+                "url": paper.url,
+                "pdf_url": paper.pdf_url,
+                "summary_json": paper.summary_json,
+            }
 
     await callback.answer()
 
-    if paper:
+    if paper_data:
         # Paper is in DB
-        if paper.summary_json:
+        if paper_data["summary_json"]:
             # Has summary - show it
             try:
-                summaries = json.loads(paper.summary_json)
+                summaries = json.loads(paper_data["summary_json"])
                 summary = summaries.get(lang, summaries.get("en", get_text("no_summary", lang)))
             except json.JSONDecodeError:
-                summary = paper.summary_json
+                summary = paper_data["summary_json"]
             
-            title = html.escape(paper.title)
+            title = html.escape(paper_data["title"])
             summary = html.escape(summary)
             
             response = (
                 f"<b>{title}</b>\n\n"
                 f"📝 {summary}\n\n"
                 f"{get_text('links', lang)}\n"
-                f"• <a href=\"{paper.url}\">arXiv</a>\n"
-                f"• <a href=\"{paper.pdf_url}\">PDF</a>"
+                f"• <a href=\"{paper_data['url']}\">arXiv</a>\n"
+                f"• <a href=\"{paper_data['pdf_url']}\">PDF</a>"
             )
 
             # Create Deep Analysis button
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(
                     text=get_text("deep_analysis_btn", lang),
-                    callback_data=f"deep:{paper.id}"
+                    callback_data=f"deep:{paper_data['id']}"
                 )]
             ])
         else:
             # No summary yet - add to priority queue
-            add_to_priority_queue(paper.id)
+            add_to_priority_queue(paper_data["id"])
             
-            title = html.escape(paper.title)
+            title = html.escape(paper_data["title"])
             response = (
                 f"<b>{title}</b>\n\n"
                 f"{get_text('summary_pending', lang)}\n\n"
                 f"{get_text('links', lang)}\n"
-                f"• <a href=\"{paper.url}\">arXiv</a>\n"
-                f"• <a href=\"{paper.pdf_url}\">PDF</a>"
+                f"• <a href=\"{paper_data['url']}\">arXiv</a>\n"
+                f"• <a href=\"{paper_data['pdf_url']}\">PDF</a>"
             )
             keyboard = None
     else:
@@ -432,13 +426,11 @@ async def callback_deep_analysis(callback: CallbackQuery):
     """Handle Deep Analysis button - run RAG pipeline with 3 short messages."""
     paper_id = int(callback.data.split(":")[1])
     
-    init_db()
-    session = get_session()
-    user_repo = UserRepository(session)
-    repo = PaperRepository(session)
-    lang = user_repo.get_language(callback.from_user.id)
-    paper = repo.get_by_id(paper_id)
-    session.close()
+    with session_scope() as session:
+        user_repo = UserRepository(session)
+        repo = PaperRepository(session)
+        lang = user_repo.get_language(callback.from_user.id)
+        paper = repo.get_by_id(paper_id)
 
     if not paper:
         await callback.answer("Paper not found", show_alert=True)

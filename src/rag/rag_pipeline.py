@@ -11,7 +11,7 @@ from src.llm import get_provider
 from src.rag.pdf_extractor import PDFExtractor
 from src.rag.chunker import SemanticChunker
 from src.rag.vector_store import VectorStore
-from src.storage import get_session, PaperRepository
+from src.storage import session_scope, PaperRepository
 
 logger = logging.getLogger(__name__)
 
@@ -49,10 +49,9 @@ class RAGPipeline:
             True if successfully indexed, False otherwise.
         """
         # Get paper from database
-        session = get_session()
-        repo = PaperRepository(session)
-        paper = await asyncio.to_thread(repo.get_by_id, paper_id)
-        session.close()
+        with session_scope() as session:
+            repo = PaperRepository(session)
+            paper = await asyncio.to_thread(repo.get_by_id, paper_id)
         
         if not paper:
             logger.error(f"Paper {paper_id} not found")
@@ -124,10 +123,9 @@ class RAGPipeline:
             }
         
         # Get paper info
-        session = get_session()
-        repo = PaperRepository(session)
-        paper = await asyncio.to_thread(repo.get_by_id, paper_id)
-        session.close()
+        with session_scope() as session:
+            repo = PaperRepository(session)
+            paper = await asyncio.to_thread(repo.get_by_id, paper_id)
         
         if not paper:
             return {

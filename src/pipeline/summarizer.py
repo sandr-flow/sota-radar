@@ -6,7 +6,7 @@ from datetime import datetime
 
 from src.config.settings import settings
 from src.llm import get_provider
-from src.storage import get_session, init_db, PaperRepository
+from src.storage import session_scope, PaperRepository
 
 logger = logging.getLogger(__name__)
 
@@ -65,39 +65,36 @@ async def summarize_papers(batch_size: int = 10) -> tuple[int, int]:
     Returns:
         Tuple of (success_count, error_count).
     """
-    # Initialize
-    # Note: init_db is essentially a no-op if logic is already done, keeping for safety
-    init_db()
-    session = get_session()
-    repo = PaperRepository(session)
     provider = get_provider()
+    
+    with session_scope() as session:
+        repo = PaperRepository(session)
 
-    # Get unsummarized papers (run in thread to avoid blocking)
-    papers = await asyncio.to_thread(repo.get_unsummarized, limit=batch_size)
-    logger.info(f"Found {len(papers)} unsummarized papers")
+        # Get unsummarized papers (run in thread to avoid blocking)
+        papers = await asyncio.to_thread(repo.get_unsummarized, limit=batch_size)
+        logger.info(f"Found {len(papers)} unsummarized papers")
 
-    success = 0
-    errors = 0
+        success = 0
+        errors = 0
 
-    for paper in papers:
-        try:
-            logger.info(f"Summarizing: {paper.source_id} - {paper.title[:50]}...")
+        for paper in papers:
+            try:
+                logger.info(f"Summarizing: {paper.source_id} - {paper.title[:50]}...")
 
-            # Generate bilingual summary in one call (rate limited by provider)
-            summary_dict = await provider.generate_bilingual_summary(paper.abstract)
-            logger.info(f"  Bilingual summary generated (EN + RU)")
+                # Generate bilingual summary in one call (rate limited by provider)
+                summary_dict = await provider.generate_bilingual_summary(paper.abstract)
+                logger.info(f"  Bilingual summary generated (EN + RU)")
 
-            # Save bilingual summary as JSON (run in thread)
-            await asyncio.to_thread(repo.update_summary, paper.id, summary_dict)
+                # Save bilingual summary as JSON (run in thread)
+                await asyncio.to_thread(repo.update_summary, paper.id, summary_dict)
 
-            success += 1
-            logger.info(f"✓ Summarized {paper.source_id}")
+                success += 1
+                logger.info(f"✓ Summarized {paper.source_id}")
 
-        except Exception as e:
-            errors += 1
-            logger.error(f"✗ Failed {paper.source_id}: {e}")
+            except Exception as e:
+                errors += 1
+                logger.error(f"✗ Failed {paper.source_id}: {e}")
 
-    session.close()
     logger.info(f"Completed: {success} success, {errors} errors")
     return success, errors
 
@@ -131,31 +128,27 @@ async def run_full_pipeline(
     if categories is None:
         categories = [c.id for c in config.categories]
 
-    # Initialize storage
-    init_db()
-    session = get_session()
-    repo = PaperRepository(session)
-
     # Fetch and store papers
     source = ArxivSource()
     total_added = 0
     total_skipped = 0
 
-    for category in categories:
-        logger.info(f"Fetching from {category}...")
-        try:
-            papers = await source.fetch_papers(category=category, max_results=max_per_category)
-            
-            # Run bulk insert in thread to avoid blocking
-            added, skipped = await asyncio.to_thread(repo.add_many, papers)
-            
-            total_added += added
-            total_skipped += skipped
-            logger.info(f"  Added: {added}, Skipped: {skipped}")
-        except Exception as e:
-            logger.error(f"Failed to fetch category {category}: {e}")
-
-    session.close()
+    with session_scope() as session:
+        repo = PaperRepository(session)
+        
+        for category in categories:
+            logger.info(f"Fetching from {category}...")
+            try:
+                papers = await source.fetch_papers(category=category, max_results=max_per_category)
+                
+                # Run bulk insert in thread to avoid blocking
+                added, skipped = await asyncio.to_thread(repo.add_many, papers)
+                
+                total_added += added
+                total_skipped += skipped
+                logger.info(f"  Added: {added}, Skipped: {skipped}")
+            except Exception as e:
+                logger.error(f"Failed to fetch category {category}: {e}")
 
     # Summarize new papers
     success, errors = await summarize_papers(batch_size=summarize_batch)

@@ -134,28 +134,21 @@ class HuggingFaceSource:
             List of category strings or None if not found.
         """
         # First try to get from DB
-        from src.storage import init_db, get_session
-        from src.storage.repository import PaperRepository
+        from src.storage import session_scope
+        from sqlalchemy import select
+        from src.storage.models import PaperModel
         
         try:
-            init_db()
-            session = get_session()
-            repo = PaperRepository(session)
-            
-            # Look up by source_id
-            from sqlalchemy import select
-            from src.storage.models import PaperModel
-            
-            stmt = select(PaperModel).where(
-                PaperModel.source == "arxiv",
-                PaperModel.source_id.like(f"{arxiv_id}%")
-            )
-            paper = session.execute(stmt).scalar_one_or_none()
-            session.close()
-            
-            if paper:
-                # Paper is in DB, it passed our category filter during fetch
-                return list(TRACKED_CATEGORIES)  # Assume it matches
+            with session_scope() as session:
+                stmt = select(PaperModel).where(
+                    PaperModel.source == "arxiv",
+                    PaperModel.source_id.like(f"{arxiv_id}%")
+                )
+                paper = session.execute(stmt).scalars().first()
+                
+                if paper:
+                    # Paper is in DB, it passed our category filter during fetch
+                    return list(TRACKED_CATEGORIES)  # Assume it matches
         except Exception as e:
             logger.warning(f"DB lookup failed for {arxiv_id}: {e}")
 

@@ -66,52 +66,50 @@ async def process_priority_queue() -> tuple[int, int]:
         Tuple of (success_count, error_count).
     """
     from src.llm import get_provider
-    from src.storage import get_session, init_db, PaperRepository
+    from src.storage import session_scope, PaperRepository
 
     if not _priority_queue and not _processing:
         return 0, 0
 
-    init_db()
-    session = get_session()
-    repo = PaperRepository(session)
     provider = get_provider()
-
     success = 0
     errors = 0
 
-    while True:
-        paper_id = get_next_priority()
-        if paper_id is None:
-            break
+    with session_scope() as session:
+        repo = PaperRepository(session)
 
-        try:
-            paper = await asyncio.to_thread(repo.get_by_id, paper_id)
-            if not paper:
-                logger.warning(f"Paper {paper_id} not found in DB")
+        while True:
+            paper_id = get_next_priority()
+            if paper_id is None:
+                break
+
+            try:
+                paper = await asyncio.to_thread(repo.get_by_id, paper_id)
+                if not paper:
+                    logger.warning(f"Paper {paper_id} not found in DB")
+                    mark_completed(paper_id)
+                    continue
+
+                if paper.summary_json:
+                    logger.info(f"Paper {paper_id} already has summary, skipping")
+                    mark_completed(paper_id)
+                    continue
+
+                logger.info(f"🔥 Priority summarizing: {paper.source_id} - {paper.title[:40]}...")
+
+                # Generate bilingual summary
+                summary_dict = await provider.generate_bilingual_summary(paper.abstract)
+                
+                # Save to DB
+                await asyncio.to_thread(repo.update_summary, paper.id, summary_dict)
+
+                success += 1
+                logger.info(f"✓ Priority summarized {paper.source_id}")
+
+            except Exception as e:
+                errors += 1
+                logger.error(f"✗ Priority summarization failed for {paper_id}: {e}")
+            finally:
                 mark_completed(paper_id)
-                continue
 
-            if paper.summary_json:
-                logger.info(f"Paper {paper_id} already has summary, skipping")
-                mark_completed(paper_id)
-                continue
-
-            logger.info(f"🔥 Priority summarizing: {paper.source_id} - {paper.title[:40]}...")
-
-            # Generate bilingual summary
-            summary_dict = await provider.generate_bilingual_summary(paper.abstract)
-            
-            # Save to DB
-            await asyncio.to_thread(repo.update_summary, paper.id, summary_dict)
-
-            success += 1
-            logger.info(f"✓ Priority summarized {paper.source_id}")
-
-        except Exception as e:
-            errors += 1
-            logger.error(f"✗ Priority summarization failed for {paper_id}: {e}")
-        finally:
-            mark_completed(paper_id)
-
-    session.close()
     return success, errors
