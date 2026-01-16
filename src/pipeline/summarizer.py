@@ -4,8 +4,11 @@ import asyncio
 import logging
 from datetime import datetime
 
+from src.config import load_config
 from src.config.settings import settings
 from src.llm import get_provider
+from src.pipeline.priority_queue import process_priority_queue, queue_size
+from src.sources.arxiv import ArxivSource
 from src.storage import session_scope, PaperRepository
 
 logger = logging.getLogger(__name__)
@@ -17,7 +20,6 @@ async def background_pipeline():
     Runs immediately on startup, then every PIPELINE_INTERVAL_MINUTES.
     Priority queue is checked more frequently.
     """
-    from src.pipeline.priority_queue import process_priority_queue, queue_size
     
     while True:
         try:
@@ -114,8 +116,6 @@ async def run_full_pipeline(
     Returns:
         Stats dict with fetched, stored, summarized counts.
     """
-    from src.config import load_config
-    from src.sources.arxiv import ArxivSource
 
     if max_per_category is None:
         max_per_category = settings.MAX_RESULTS_PER_CATEGORY

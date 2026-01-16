@@ -2,13 +2,19 @@
 
 import html
 import json
+import logging
 import yaml
 from aiogram import Dispatcher, F, Router
 from aiogram.filters import Command
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
+from sqlalchemy import select
 
 from src.config.settings import settings
+from src.pipeline.priority_queue import add_to_priority_queue
+from src.rag import RAGPipeline
+from src.sources.huggingface import HuggingFaceSource
 from src.storage import session_scope, PaperRepository, UserRepository
+from src.storage.models import PaperModel
 
 router = Router()
 
@@ -117,8 +123,6 @@ async def cmd_digest(message: Message):
     )
 
     # Fetch trending papers from HuggingFace
-    from src.sources.huggingface import HuggingFaceSource
-    
     hf_source = HuggingFaceSource()
     papers = await hf_source.fetch_filtered_papers(limit=10)
 
@@ -248,7 +252,6 @@ async def callback_paper(callback: CallbackQuery):
         ])
     else:
         # No summary yet - add to priority queue
-        from src.pipeline.priority_queue import add_to_priority_queue
         add_to_priority_queue(paper_data["id"])
         
         title = html.escape(paper_data["title"])
@@ -296,9 +299,7 @@ async def callback_hf_paper(callback: CallbackQuery):
     arxiv_id = callback.data.split(":")[1]
     
     # Import here to avoid circular imports
-    from sqlalchemy import select
-    from src.storage.models import PaperModel
-    from src.pipeline.priority_queue import add_to_priority_queue, is_in_queue
+    # (Moved to top level)
     
     # Extract paper data inside session scope to avoid DetachedInstanceError
     paper_data = None
@@ -438,8 +439,6 @@ async def callback_deep_analysis(callback: CallbackQuery):
     )
 
     try:
-        from src.rag import RAGPipeline
-        
         rag = RAGPipeline()
         title = html.escape(paper_data["title"][:80])
         
@@ -478,7 +477,6 @@ async def callback_deep_analysis(callback: CallbackQuery):
             )
         
     except Exception as e:
-        import logging
         logging.getLogger(__name__).error(f"Deep analysis failed: {e}", exc_info=True)
         await loading_msg.edit_text(
             f"❌ Analysis failed: {str(e)[:200]}",

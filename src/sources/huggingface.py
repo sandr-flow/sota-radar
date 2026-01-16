@@ -1,12 +1,17 @@
 """HuggingFace Daily Papers source implementation for sota-radar."""
 
 import logging
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from datetime import datetime
+
+from sqlalchemy import select
 
 from src.infrastructure.http_client import get_client
 from src.models.paper import Paper
 from src.sources.base import BaseSource
+from src.storage import session_scope
+from src.storage.models import PaperModel
 
 logger = logging.getLogger(__name__)
 
@@ -167,10 +172,6 @@ class HuggingFaceSource(BaseSource):
             List of category strings or None if not found.
         """
         # First try to get from DB
-        from src.storage import session_scope
-        from sqlalchemy import select
-        from src.storage.models import PaperModel
-        
         try:
             with session_scope() as session:
                 stmt = select(PaperModel).where(
@@ -197,8 +198,6 @@ class HuggingFaceSource(BaseSource):
         Returns:
             List of category strings or None if not found.
         """
-        import xml.etree.ElementTree as ET
-        
         client = get_client()
         url = f"https://export.arxiv.org/api/query?id_list={arxiv_id}"
         

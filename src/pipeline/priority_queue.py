@@ -5,6 +5,9 @@ import logging
 from collections import deque
 from typing import Set
 
+from src.llm import get_provider
+from src.storage import session_scope, PaperRepository
+
 logger = logging.getLogger(__name__)
 
 # Priority queue for papers requested by users
@@ -65,9 +68,6 @@ async def process_priority_queue() -> tuple[int, int]:
     Returns:
         Tuple of (success_count, error_count).
     """
-    from src.llm import get_provider
-    from src.storage import session_scope, PaperRepository
-
     if not _priority_queue and not _processing:
         return 0, 0
 

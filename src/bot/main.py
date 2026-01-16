@@ -5,8 +5,9 @@ import logging
 
 from aiogram import Bot, Dispatcher
 
-from src.config.settings import settings
 from src.bot.handlers import register_handlers
+from src.config.settings import settings
+from src.infrastructure.http_client import close_client
 from src.pipeline.summarizer import background_pipeline
 
 # Configure logging
@@ -36,7 +37,6 @@ async def main():
     try:
         await dp.start_polling(bot)
     finally:
-        from src.infrastructure.http_client import close_client
         await close_client()
         logger.info("👋 Bot shutdown complete.")
 

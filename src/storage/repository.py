@@ -3,7 +3,8 @@
 import json
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select
+from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.orm import Session
 
 from src.models.paper import Paper
@@ -79,8 +80,6 @@ class PaperRepository:
         """
         if not papers:
             return 0, 0
-            
-        from sqlalchemy.dialects.sqlite import insert
 
         # Prepare list of dicts for bulk insert
         values = [
@@ -191,7 +190,6 @@ class PaperRepository:
         Returns:
             Number of papers in database.
         """
-        from sqlalchemy import func
         stmt = select(func.count(PaperModel.id))
         return self.session.execute(stmt).scalar() or 0
 
