@@ -1,6 +1,7 @@
 """Centralized configuration for sota-radar."""
 
 from pathlib import Path
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -39,6 +40,31 @@ class Settings(BaseSettings):
     EMBEDDING_OFFLINE_MODE: bool = True  # Skip huggingface.co checks if model cached
     CHUNK_SIZE: int = 512
     CHUNK_OVERLAP: int = 64
+    
+    @field_validator("PIPELINE_INTERVAL_MINUTES")
+    @classmethod
+    def validate_pipeline_interval(cls, v: int) -> int:
+        """Validate pipeline interval is positive."""
+        if v <= 0:
+            raise ValueError("PIPELINE_INTERVAL_MINUTES must be > 0")
+        return v
+    
+    @field_validator("PAPERS_PER_DIGEST")
+    @classmethod
+    def validate_papers_per_digest(cls, v: int) -> int:
+        """Validate papers per digest is positive."""
+        if v <= 0:
+            raise ValueError("PAPERS_PER_DIGEST must be > 0")
+        return v
+    
+    @model_validator(mode="after")
+    def validate_chunk_sizes(self) -> "Settings":
+        """Validate chunk size is greater than overlap."""
+        if self.CHUNK_SIZE <= self.CHUNK_OVERLAP:
+            raise ValueError(
+                f"CHUNK_SIZE ({self.CHUNK_SIZE}) must be > CHUNK_OVERLAP ({self.CHUNK_OVERLAP})"
+            )
+        return self
     
     model_config = SettingsConfigDict(
         env_file=".env",
