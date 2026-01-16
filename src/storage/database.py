@@ -10,6 +10,8 @@ from src.storage.models import Base
 
 # Singleton engine instance
 _engine: Engine | None = None
+# Singleton sessionmaker instance
+_SessionLocal: sessionmaker | None = None
 
 
 def get_engine() -> Engine:
@@ -33,14 +35,19 @@ def get_engine() -> Engine:
 
 
 def get_session() -> Session:
-    """Create database session using singleton engine.
+    """Create database session using singleton engine and sessionmaker.
 
     Returns:
         SQLAlchemy session.
     """
-    engine = get_engine()
-    SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
-    return SessionLocal()
+    global _SessionLocal
+    if _SessionLocal is None:
+        _SessionLocal = sessionmaker(
+            bind=get_engine(),
+            autoflush=False,
+            autocommit=False
+        )
+    return _SessionLocal()
 
 
 @contextmanager
