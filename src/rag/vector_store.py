@@ -31,6 +31,10 @@ class VectorStore:
 
     def __init__(self):
         """Initialize vector store."""
+        if hasattr(self, "_initialized"):
+            return
+        self._initialized = True
+        
         self.persist_dir = str(
             getattr(settings, "CHROMA_PERSIST_DIR", settings.DATA_DIR / "chroma")
         )
