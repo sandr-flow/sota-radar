@@ -22,39 +22,24 @@ class CategoryConfig:
 
 
 @dataclass
-class Settings:
-    """Global parsing settings.
-
-    Attributes:
-        max_results_per_category: Max papers to fetch per category.
-        papers_per_digest: Papers to show in digest.
-    """
-
-    max_results_per_category: int = 100
-    papers_per_digest: int = 10
-
-
-@dataclass
-class Config:
-    """Application configuration.
+class CategoriesConfig:
+    """Categories configuration loaded from YAML.
 
     Attributes:
         categories: List of arXiv categories to track.
-        settings: Global settings.
     """
 
     categories: list[CategoryConfig]
-    settings: Settings
 
 
-def load_config(config_path: Path | str | None = None) -> Config:
-    """Load configuration from YAML file.
+def load_config(config_path: Path | str | None = None) -> CategoriesConfig:
+    """Load categories configuration from YAML file.
 
     Args:
         config_path: Path to config file. Defaults to config/categories.yaml.
 
     Returns:
-        Parsed Config object.
+        Parsed CategoriesConfig object.
     """
     if config_path is None:
         config_path = Path(__file__).parent.parent.parent / "config" / "categories.yaml"
@@ -73,10 +58,5 @@ def load_config(config_path: Path | str | None = None) -> Config:
         for cat in data.get("categories", [])
     ]
 
-    settings_data = data.get("settings", {})
-    settings = Settings(
-        max_results_per_category=settings_data.get("max_results_per_category", 100),
-        papers_per_digest=settings_data.get("papers_per_digest", 10),
-    )
+    return CategoriesConfig(categories=categories)
 
-    return Config(categories=categories, settings=settings)
