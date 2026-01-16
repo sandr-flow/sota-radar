@@ -44,4 +44,9 @@ prompts:
     Answer in 2-3 sentences maximum. Give concrete examples if possible.
     Return as JSON: {{"en": "English answer", "ru": "Russian answer"}}
 
+  # Retrieval Queries
+  rag_essence_query: "{title} main contribution methodology approach"
+  rag_importance_query: "{title} significance impact problem solved"
+  rag_applications_query: "{title} applications use cases practical"
+
 

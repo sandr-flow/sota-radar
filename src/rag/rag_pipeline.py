@@ -149,14 +149,11 @@ class RAGPipeline:
         
     
         # Define query based on question type
-        query_map = {
-            "rag_essence": f"{paper_data['title']} main contribution methodology approach",
-            "rag_importance": f"{paper_data['title']} significance impact problem solved",
-            "rag_applications": f"{paper_data['title']} applications use cases practical",
-        }
+        query_key = f"{prompt_key}_query"
+        query_template = self._prompts.get(query_key, "{title}")
         
-        # Fallback to title if unknown prompt key
-        search_query = query_map.get(prompt_key, paper_data["title"])
+        # Format query with paper title
+        search_query = query_template.format(title=paper_data["title"])
         
         logger.info(f"🔎 RAG Query ({prompt_key}): '{search_query[:100]}...'")
         
