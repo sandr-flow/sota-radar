@@ -1,7 +1,7 @@
 """Repository for paper storage with deduplication."""
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import func, select
 from sqlalchemy.dialects.sqlite import insert
@@ -92,7 +92,7 @@ class PaperRepository:
                 "published": paper.published,
                 "url": paper.url,
                 "pdf_url": paper.pdf_url,
-                "created_at": datetime.utcnow()
+                "created_at": datetime.now(timezone.utc)
             }
             for paper in papers
         ]
@@ -151,7 +151,7 @@ class PaperRepository:
         stmt = select(PaperModel).where(PaperModel.id == paper_id)
         paper = self.session.execute(stmt).scalar_one()
         paper.summary_json = json.dumps(summary_dict, ensure_ascii=False)
-        paper.summarized_at = datetime.utcnow()
+        paper.summarized_at = datetime.now(timezone.utc)
         self.session.commit()
 
     def get_recent(self, limit: int = 10) -> list[PaperModel]:
@@ -173,16 +173,21 @@ class PaperRepository:
     def reset_all_summaries(self) -> int:
         """Reset all summaries for re-summarization.
 
+        Uses bulk UPDATE to avoid loading all records into memory.
+
         Returns:
             Number of papers reset.
         """
-        stmt = select(PaperModel).where(PaperModel.summary_json.isnot(None))
-        papers = list(self.session.execute(stmt).scalars().all())
-        for paper in papers:
-            paper.summary_json = None
-            paper.summarized_at = None
+        from sqlalchemy import update
+        
+        stmt = (
+            update(PaperModel)
+            .where(PaperModel.summary_json.isnot(None))
+            .values(summary_json=None, summarized_at=None)
+        )
+        result = self.session.execute(stmt)
         self.session.commit()
-        return len(papers)
+        return result.rowcount
 
     def count(self) -> int:
         """Get total paper count.
