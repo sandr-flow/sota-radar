@@ -127,17 +127,18 @@ PDF downloads now have retry with exponential backoff.
 
 ---
 
-## TD-012: RAG Query Refinement
+## TD-012: RAG Query Refinement ✅ RESOLVED
 
 **Priority:** Low  
 **Impact:** Answer quality  
 **Added:** 2026-01-15
+**Resolved:** 2026-01-16
 
-**Current state:**  
-Uses paper title as query for chunk retrieval. May not retrieve most relevant chunks for specific questions.
-
-**Solution:**  
-Use question-specific queries for retrieval.
+**Solution implemented:**  
+Updates `answer_question` to use question-specific search queries:
+- "rag_essence" → query with "main contribution methodology"
+- "rag_importance" → query with "significance impact problem solved"
+- "rag_applications" → query with "applications use cases practical"
 
 ---
 

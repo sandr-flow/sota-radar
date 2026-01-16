@@ -147,9 +147,22 @@ class RAGPipeline:
                 "ru": "Статья не найдена."
             }
         
+    
+        # Define query based on question type
+        query_map = {
+            "rag_essence": f"{paper_data['title']} main contribution methodology approach",
+            "rag_importance": f"{paper_data['title']} significance impact problem solved",
+            "rag_applications": f"{paper_data['title']} applications use cases practical",
+        }
+        
+        # Fallback to title if unknown prompt key
+        search_query = query_map.get(prompt_key, paper_data["title"])
+        
+        logger.info(f"🔎 RAG Query ({prompt_key}): '{search_query[:100]}...'")
+        
         # Retrieve relevant chunks
         results = self.vector_store.query(
-            query_text=paper_data["title"],
+            query_text=search_query,
             paper_id=paper_data["source_id"],
             n_results=5
         )
