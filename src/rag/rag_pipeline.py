@@ -48,27 +48,35 @@ class RAGPipeline:
         Returns:
             True if successfully indexed, False otherwise.
         """
-        # Get paper from database
+        # Get paper from database - extract data inside session scope
+        paper_data = None
         with session_scope() as session:
             repo = PaperRepository(session)
             paper = await asyncio.to_thread(repo.get_by_id, paper_id)
+            if paper:
+                paper_data = {
+                    "source_id": paper.source_id,
+                    "source": paper.source,
+                    "title": paper.title,
+                    "pdf_url": paper.pdf_url,
+                }
         
-        if not paper:
+        if not paper_data:
             logger.error(f"Paper {paper_id} not found")
             return False
         
         # Check if already indexed
-        if self.vector_store.paper_exists(paper.source_id):
-            logger.info(f"Paper {paper.source_id} already indexed")
+        if self.vector_store.paper_exists(paper_data["source_id"]):
+            logger.info(f"Paper {paper_data['source_id']} already indexed")
             return True
         
         # Download and extract PDF
-        if not paper.pdf_url:
+        if not paper_data["pdf_url"]:
             logger.error(f"No PDF URL for paper {paper_id}")
             return False
         
         try:
-            full_text = await self.pdf_extractor.download_and_extract(paper.pdf_url)
+            full_text = await self.pdf_extractor.download_and_extract(paper_data["pdf_url"])
         except Exception as e:
             logger.error(f"Failed to extract PDF: {e}")
             return False
@@ -86,18 +94,18 @@ class RAGPipeline:
         
         # Index chunks
         metadata = {
-            "source": paper.source,
-            "title": paper.title[:200],  # Truncate for metadata
+            "source": paper_data["source"],
+            "title": paper_data["title"][:200],  # Truncate for metadata
             "db_id": paper_id
         }
         
         self.vector_store.add_paper_chunks(
-            paper_id=paper.source_id,
+            paper_id=paper_data["source_id"],
             chunks=chunks,
             metadata=metadata
         )
         
-        logger.info(f"Successfully indexed paper {paper.source_id} with {len(chunks)} chunks")
+        logger.info(f"Successfully indexed paper {paper_data['source_id']} with {len(chunks)} chunks")
         return True
 
     async def answer_question(
@@ -122,12 +130,18 @@ class RAGPipeline:
                 "ru": "Не удалось проиндексировать статью."
             }
         
-        # Get paper info
+        # Get paper info - extract data inside session scope
+        paper_data = None
         with session_scope() as session:
             repo = PaperRepository(session)
             paper = await asyncio.to_thread(repo.get_by_id, paper_id)
+            if paper:
+                paper_data = {
+                    "title": paper.title,
+                    "source_id": paper.source_id,
+                }
         
-        if not paper:
+        if not paper_data:
             return {
                 "en": "Paper not found.",
                 "ru": "Статья не найдена."
@@ -135,8 +149,8 @@ class RAGPipeline:
         
         # Retrieve relevant chunks
         results = self.vector_store.query(
-            query_text=paper.title,
-            paper_id=paper.source_id,
+            query_text=paper_data["title"],
+            paper_id=paper_data["source_id"],
             n_results=5
         )
         
@@ -160,37 +174,8 @@ class RAGPipeline:
         prompt = prompt_template.format(context=context)
         
         try:
-            import json
-            from src.infrastructure.http_client import get_client
-            from src.llm.rate_limiter import MISTRAL_RATE_LIMITER
-            
-            MISTRAL_API_URL = "https://api.mistral.ai/v1/chat/completions"
             provider = get_provider()
-            
-            await MISTRAL_RATE_LIMITER.acquire()
-            
-            headers = {
-                "Authorization": f"Bearer {provider.api_key}",
-                "Content-Type": "application/json",
-            }
-            payload = {
-                "model": provider.model,
-                "messages": [{"role": "user", "content": prompt}],
-                "response_format": {"type": "json_object"},
-            }
-            
-            client = get_client()
-            response = await client.post(
-                MISTRAL_API_URL,
-                headers=headers,
-                json=payload,
-                timeout=60.0
-            )
-            response.raise_for_status()
-            data = response.json()
-            
-            content = data["choices"][0]["message"]["content"]
-            answer = json.loads(content)
+            answer = await provider.generate_json_response(prompt)
             
             if "en" not in answer or "ru" not in answer:
                 raise ValueError("Missing required language keys")

@@ -1,13 +1,14 @@
 """Base LLM provider interface for sota-radar."""
 
 from abc import ABC, abstractmethod
+from typing import Any
 
 
 class BaseLLMProvider(ABC):
     """Abstract base class for LLM providers.
 
     All LLM implementations must inherit from this class and implement
-    bilingual summarization.
+    the required methods.
     """
 
     @property
@@ -26,5 +27,22 @@ class BaseLLMProvider(ABC):
 
         Returns:
             Dict with 'en' and 'ru' keys containing summaries.
+        """
+        pass
+
+    @abstractmethod
+    async def generate_json_response(self, prompt: str) -> dict[str, Any]:
+        """Generate a JSON-structured response for the given prompt.
+
+        Uses provider's JSON mode if available to ensure valid JSON output.
+
+        Args:
+            prompt: The prompt requesting a JSON response.
+
+        Returns:
+            Parsed JSON response as a dictionary.
+
+        Raises:
+            ValueError: If JSON parsing fails or response format is invalid.
         """
         pass
