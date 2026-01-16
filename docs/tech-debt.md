@@ -27,34 +27,11 @@ For MVP (single user, local SQLite), latency is ~1-10ms — negligible.
 
 ---
 
-## TD-002: Deduplication Query Optimization
-
-**Priority:** Low  
-**Impact:** Insert performance  
-**Added:** 2026-01-09
-
-**Current state:**  
-`exists()` check before each `add()` = 2 queries per paper.
-
-**When to fix:**  
-When batch-inserting 1000+ papers and seeing slow performance.
-
-**Solution:**  
-Use `INSERT OR IGNORE` or `ON CONFLICT DO NOTHING`.
+## TD-002: Deduplication Query Optimization ✅ RESOLVED
 
 ---
 
-## TD-003: Session Management
-
-**Priority:** Low  
-**Impact:** Code quality  
-**Added:** 2026-01-09
-
-**Current state:**  
-Manual session open/close without context manager.
-
-**Solution:**  
-Add `@contextmanager` wrapper for cleaner session handling.
+## TD-003: Session Management ✅ RESOLVED
 
 ---
 
@@ -65,26 +42,14 @@ Add `@contextmanager` wrapper for cleaner session handling.
 **Added:** 2026-01-09
 
 **Current state:**  
-No retry logic on API failures. Single timeout (60s) hardcoded.
-
-**When to fix:**  
-When running batch summarization and seeing transient failures.
+No retry logic on LLM API failures.
 
 **Solution:**  
-Add exponential backoff retry with `tenacity` or custom implementation.
+Add exponential backoff retry for Mistral API calls.
 
 ---
 
 ## TD-005: LLM Rate Limiting ✅ RESOLVED
-
-**Priority:** Medium  
-**Impact:** API costs, rate limit errors  
-**Added:** 2026-01-09  
-**Resolved:** 2026-01-09
-
-**Solution implemented:**  
-Added `aiolimiter` with 1 RPS limit in `src/llm/rate_limiter.py`.  
-All Mistral API calls go through rate limiter in `_call_api()` method.
 
 ---
 
@@ -104,16 +69,7 @@ Implement signal handlers for SIGINT/SIGTERM to close sessions and polling clean
 
 ## TD-007: User Tracking ✅ RESOLVED
 
-**Priority:** Low  
-**Impact:** Personalization  
-**Added:** 2026-01-09  
-**Resolved:** 2026-01-15
-
-**Solution implemented:**  
-Added `UserModel` and `UserRepository` in `src/storage/`. Users table tracks `user_id` and `language` preference. Language is captured on /start and stored persistently.
-
 ---
-
 
 ## TD-008: Pagination
 
@@ -143,19 +99,13 @@ Switch to `parse_mode="MarkdownV2"` and ensure LLM output is properly escaped.
 
 ---
 
-## TD-010: RAG Retry Logic & Error Handling
+## TD-010: RAG Retry Logic & Error Handling ✅ PARTIALLY RESOLVED
 
-**Priority:** Medium  
-**Impact:** Reliability  
-**Added:** 2026-01-15
+**Added:** 2026-01-15  
+**Partial:** 2026-01-16
 
-**Current state:**  
-RAG pipeline has no retry logic for PDF downloads or LLM calls. Single request failure = analysis failure.
-
-**Solution:**  
-Add exponential backoff retry with `tenacity` for:
-- PDF downloads (network errors, timeouts)
-- Mistral API calls (rate limits, 503 errors)
+PDF downloads now have retry with exponential backoff.  
+**Remaining:** Mistral API calls in RAG pipeline still need retry logic.
 
 ---
 
@@ -187,10 +137,7 @@ Add exponential backoff retry with `tenacity` for:
 Uses paper title as query for chunk retrieval. May not retrieve most relevant chunks for specific questions.
 
 **Solution:**  
-Use question-specific queries for retrieval:
-- "essence" → query with "main contribution methodology"  
-- "importance" → query with "significance impact problem solving"
-- "applications" → query with "applications use cases practical"
+Use question-specific queries for retrieval.
 
 ---
 
@@ -203,14 +150,10 @@ Use question-specific queries for retrieval:
 **Current state:**  
 No metrics to evaluate RAG retrieval quality or answer relevance.
 
-**Note:**  
-Data flow first, accuracy second. Ensure pipeline is stable before adding metrics.
-
 **Solution:**  
 1. Log retrieval distances (ChromaDB similarity scores)
 2. Track avg chunks per paper, avg chunk size
 3. Add optional user feedback (👍/👎) on analysis quality
-4. Consider offline evaluation with ground truth Q&A pairs
 
 ---
 
@@ -230,16 +173,55 @@ HuggingFace Daily Papers API calls are not rate-limited. No retry logic on failu
 
 ---
 
-## TD-015: Priority Queue Persistence
+## TD-015: Priority Queue Persistence ✅ RESOLVED
+
+---
+
+## TD-016: Разделение MistralProvider (SRP)
 
 **Priority:** Low  
-**Impact:** Reliability  
-**Added:** 2026-01-15
+**Impact:** Testability, maintainability  
+**Added:** 2026-01-16
 
 **Current state:**  
-Priority summarization queue is in-memory (lost on restart).
+Класс совмещает HTTP-логику, rate limiting и бизнес-логику суммаризации.
 
 **Solution:**  
-1. Store queue in SQLite or Redis
-2. Add `priority_requested` column to papers table
-3. Process papers with `priority_requested=True` first on restart
+Разделить на `MistralApiClient` и `MistralProvider`.
+
+**When to fix:**  
+При добавлении юнит-тестов или переходе на другой LLM provider.
+
+---
+
+## TD-017: Dependency Injection для глобальных объектов
+
+**Priority:** Low  
+**Impact:** Testability  
+**Added:** 2026-01-16
+
+**Current state:**  
+Глобальные `MISTRAL_RATE_LIMITER` и `_client` затрудняют тестирование.
+
+**Solution:**  
+Убрать глобальные объекты, передавать зависимости через DI или фабрики.
+
+**When to fix:**  
+При добавлении юнит-тестов или переходе на multi-instance deployment.
+
+---
+
+## TD-018: Рефакторинг RAGPipeline
+
+**Priority:** Medium  
+**Impact:** Code maintainability  
+**Added:** 2026-01-16
+
+**Current state:**  
+God-object на 200+ строк с PDF загрузкой, чанкингом, эмбеддингами и генерацией ответов.
+
+**Solution:**  
+Разделить на `PaperIndexer`, `PaperRetriever`, `AnswerGenerator`.
+
+**When to fix:**  
+При существенном расширении RAG-функционала.
