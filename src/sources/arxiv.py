@@ -126,7 +126,9 @@ class ArxivSource(BaseSource):
                 url=url,
                 pdf_url=pdf_url,
             )
-        except Exception:
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Failed to parse arXiv entry: {e}")
             return None
 
     def _clean_text(self, text: str) -> str:
