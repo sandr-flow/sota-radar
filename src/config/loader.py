@@ -42,7 +42,8 @@ def load_config(config_path: Path | str | None = None) -> CategoriesConfig:
         Parsed CategoriesConfig object.
     """
     if config_path is None:
-        config_path = Path(__file__).parent.parent.parent / "config" / "categories.yaml"
+        from src.config.settings import settings
+        config_path = settings.CONFIG_DIR / "categories.yaml"
     else:
         config_path = Path(config_path)
 

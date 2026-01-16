@@ -21,7 +21,11 @@ class Settings(BaseSettings):
     # LLM
     MISTRAL_API_KEY: str
     MISTRAL_MODEL: str = "mistral-large-latest"
+    MISTRAL_API_URL: str = "https://api.mistral.ai/v1/chat/completions"
     LLM_PROVIDER: str = "mistral"
+
+    # HTTP
+    HTTP_TIMEOUT: float = 60.0
     
     # Pipeline
     PIPELINE_INTERVAL_MINUTES: int = 5

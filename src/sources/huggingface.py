@@ -12,14 +12,14 @@ from src.models.paper import Paper
 from src.sources.base import BaseSource
 from src.storage import session_scope
 from src.storage.models import PaperModel
+from src.utils.date_utils import parse_iso_date
 
 logger = logging.getLogger(__name__)
 
 # HuggingFace API constants
 HF_DAILY_PAPERS_URL = "https://huggingface.co/api/daily_papers"
 
-# Our tracked arXiv categories
-TRACKED_CATEGORIES = {"cs.LG", "cs.CL", "cs.CV", "cs.AI", "cs.NE", "cs.IR", "stat.ML"}
+# Our tracked arXiv categories - now loaded dynamically from config
 
 
 @dataclass
@@ -45,6 +45,14 @@ class HuggingFaceSource(BaseSource):
     def source_name(self) -> str:
         """Return unique identifier for this source."""
         return "huggingface"
+
+    @property
+    def tracked_categories(self) -> set[str]:
+        """Get tracked categories from config."""
+        if not hasattr(self, "_cached_categories"):
+            from src.config import load_config
+            self._cached_categories = {c.id for c in load_config().categories}
+        return self._cached_categories
 
     async def fetch_papers(self, limit: int = 10, **kwargs) -> list[Paper]:
         """Fetch papers from HuggingFace and return as unified Paper objects.
@@ -100,7 +108,7 @@ class HuggingFaceSource(BaseSource):
 
             try:
                 published_str = paper_data.get("publishedAt", "")
-                published_at = self._parse_date(published_str)
+                published_at = parse_iso_date(published_str)
                 
                 paper = HFPaper(
                     arxiv_id=arxiv_id,
@@ -130,13 +138,13 @@ class HuggingFaceSource(BaseSource):
         Args:
             limit: Maximum number of papers to return.
             categories: Set of arXiv categories to filter by.
-                       Defaults to TRACKED_CATEGORIES.
+                       Defaults to configured categories.
 
         Returns:
             List of HFPaper objects matching category filter.
         """
         if categories is None:
-            categories = TRACKED_CATEGORIES
+            categories = self.tracked_categories
 
         # Fetch all daily papers
         all_papers = await self.fetch_daily_papers(limit=100)
@@ -182,7 +190,7 @@ class HuggingFaceSource(BaseSource):
                 
                 if paper:
                     # Paper is in DB, it passed our category filter during fetch
-                    return list(TRACKED_CATEGORIES)  # Assume it matches
+                    return list(self.tracked_categories)  # Assume it matches
         except Exception as e:
             logger.warning(f"DB lookup failed for {arxiv_id}: {e}")
 
@@ -233,11 +241,4 @@ class HuggingFaceSource(BaseSource):
             logger.warning(f"arXiv API lookup failed for {arxiv_id}: {e}")
             return None
 
-    def _parse_date(self, date_str: str) -> datetime:
-        """Parse ISO format date string."""
-        if not date_str:
-            return datetime.now()
-        try:
-            return datetime.fromisoformat(date_str.replace("Z", "+00:00"))
-        except ValueError:
-            return datetime.now()
+

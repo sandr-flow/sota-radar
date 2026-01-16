@@ -8,6 +8,7 @@ import httpx
 from src.infrastructure.http_client import get_client
 from src.models.paper import Paper
 from src.sources.base import BaseSource
+from src.utils.date_utils import parse_iso_date
 
 # arXiv API constants
 ARXIV_API_URL = "https://export.arxiv.org/api/query"
@@ -109,7 +110,7 @@ class ArxivSource(BaseSource):
             published_str = (
                 published_elem.text if published_elem is not None else None
             )
-            published = self._parse_date(published_str)
+            published = parse_iso_date(published_str)
 
             # Extract URLs
             url = f"https://arxiv.org/abs/{arxiv_id}"
@@ -131,13 +132,3 @@ class ArxivSource(BaseSource):
     def _clean_text(self, text: str) -> str:
         """Clean text by removing extra whitespace."""
         return " ".join(text.split())
-
-    def _parse_date(self, date_str: str | None) -> datetime:
-        """Parse ISO format date string."""
-        if not date_str:
-            return datetime.now()
-        try:
-            # Format: 2023-01-15T12:00:00Z
-            return datetime.fromisoformat(date_str.replace("Z", "+00:00"))
-        except ValueError:
-            return datetime.now()
