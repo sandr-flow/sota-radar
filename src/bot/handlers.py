@@ -2,10 +2,12 @@
 
 import html
 import json
+import yaml
 from aiogram import Dispatcher, F, Router
 from aiogram.filters import Command
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
+from src.config.settings import settings
 from src.storage import session_scope, PaperRepository, UserRepository
 
 router = Router()
@@ -14,49 +16,14 @@ router = Router()
 # Format: {user_id: message_id}
 _summary_messages: dict[int, int] = {}
 
-# Localization strings
-STRINGS = {
-    "en": {
-        "welcome": "👋 Welcome to <b>sota-radar</b>!\n\nI deliver AI/ML paper summaries from arXiv.\n\nSelect your language:",
-        "lang_set": "✅ Language set to English",
-        "onboarding": "🤖 <b>How to use sota-radar:</b>\n\n🔥 /digest — Trending papers (from HuggingFace)\n📰 /latest — Most recent papers\n   Tap any paper to see its summary\n\n🌐 /language — Change language\n\n📚 /help — Full command list\n\n<i>Papers are updated every 5 minutes from arXiv.</i>",
-        "help": "📚 <b>sota-radar help</b>\n\n/digest - Trending papers (HuggingFace Daily)\n/latest - Most recent papers from arXiv\n/language - Change language\n/start - Welcome message\n/help - This message\n\nTracked arXiv categories:\ncs.LG, cs.CL, cs.CV, cs.AI, cs.NE, cs.IR, stat.ML",
-        "digest_header": "🔥 <b>Trending Papers</b>\n\nFrom HuggingFace Daily Papers:",
-        "latest_header": "📰 <b>Latest Papers</b>\n\nMost recent from arXiv:",
-        "no_papers": "No papers yet. Run the pipeline first!",
-        "no_trending": "No trending papers found. Try /latest for recent papers.",
-        "no_summary": "Summary not available yet.",
-        "links": "🔗 Links:",
-        "deep_analysis_btn": "🔬 Deep Analysis",
-        "deep_analysis_loading": "🔬 Analyzing full paper...",
-        "q1_header": "💡 <b>What is the essence?</b> (1/3)",
-        "q2_header": "⭐ <b>Why is this important?</b> (2/3)",
-        "q3_header": "🛠 <b>Where can this be applied?</b> (3/3)",
-        "loading_trending": "🔄 Loading trending papers...",
-        "summary_pending": "⏳ Summary is being generated. Try again in a minute.",
-    },
+# Load localization strings from YAML
+def _load_strings() -> dict[str, dict[str, str]]:
+    """Load localization strings from config/strings.yaml."""
+    strings_path = settings.BASE_DIR / "config" / "strings.yaml"
+    with open(strings_path, encoding="utf-8") as f:
+        return yaml.safe_load(f).get("strings", {})
 
-    "ru": {
-        "welcome": "👋 Добро пожаловать в <b>sota-radar</b>!\n\nЯ доставляю AI/ML саммари статей с arXiv.\n\nВыберите язык:",
-        "lang_set": "✅ Язык установлен: Русский",
-        "onboarding": "🤖 <b>Как пользоваться sota-radar:</b>\n\n🔥 /digest — Трендовые статьи (HuggingFace)\n📰 /latest — Последние статьи\n   Нажмите на статью для просмотра саммари\n\n🌐 /language — Сменить язык\n\n📚 /help — Полный список команд\n\n<i>Статьи обновляются каждые 5 минут с arXiv.</i>",
-        "help": "📚 <b>Справка sota-radar</b>\n\n/digest - Трендовые статьи (HuggingFace Daily)\n/latest - Последние статьи с arXiv\n/language - Изменить язык\n/start - Приветствие\n/help - Эта справка\n\nКатегории arXiv:\ncs.LG, cs.CL, cs.CV, cs.AI, cs.NE, cs.IR, stat.ML",
-        "digest_header": "🔥 <b>Трендовые статьи</b>\n\nИз HuggingFace Daily Papers:",
-        "latest_header": "📰 <b>Последние статьи</b>\n\nСамые свежие с arXiv:",
-        "no_papers": "Статей пока нет. Запустите пайплайн!",
-        "no_trending": "Трендовых статей не найдено. Попробуйте /latest.",
-        "no_summary": "Саммари ещё не готово.",
-        "links": "🔗 Ссылки:",
-        "deep_analysis_btn": "🔬 Глубокий анализ",
-        "deep_analysis_loading": "🔬 Анализирую полный текст статьи...",
-        "q1_header": "💡 <b>В чём суть?</b> (1/3)",
-        "q2_header": "⭐ <b>Почему это важно?</b> (2/3)",
-        "q3_header": "🛠 <b>Где применимо?</b> (3/3)",
-        "loading_trending": "🔄 Загружаю трендовые статьи...",
-        "summary_pending": "⏳ Саммари формируется. Попробуйте через минуту.",
-    },
-}
-
+STRINGS = _load_strings()
 
 
 def get_text(key: str, lang: str) -> str:
