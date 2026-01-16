@@ -34,6 +34,9 @@ class PaperModel(Base):
     summary_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     summarized_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     
+    # Priority queue - survives restarts
+    priority_requested: Mapped[bool] = mapped_column(default=False, nullable=False)
+    
     # Metadata
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=lambda: datetime.now(timezone.utc)

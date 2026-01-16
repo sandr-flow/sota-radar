@@ -197,6 +197,55 @@ class PaperRepository:
         """
         stmt = select(func.count(PaperModel.id))
         return self.session.execute(stmt).scalar() or 0
+    
+    # Priority queue methods for persistent queue
+    
+    def mark_priority(self, paper_id: int) -> bool:
+        """Mark paper for priority summarization.
+        
+        Args:
+            paper_id: Paper database ID.
+            
+        Returns:
+            True if marked, False if already marked or not found.
+        """
+        paper = self.get_by_id(paper_id)
+        if paper is None or paper.priority_requested:
+            return False
+        paper.priority_requested = True
+        self.session.commit()
+        return True
+    
+    def get_priority_papers(self, limit: int = 10) -> list[PaperModel]:
+        """Get papers marked for priority summarization.
+        
+        Args:
+            limit: Maximum number of papers to return.
+            
+        Returns:
+            List of unsummarized papers with priority_requested=True.
+        """
+        stmt = (
+            select(PaperModel)
+            .where(
+                PaperModel.priority_requested == True,
+                PaperModel.summary_json.is_(None)
+            )
+            .order_by(PaperModel.id)  # FIFO order
+            .limit(limit)
+        )
+        return list(self.session.execute(stmt).scalars().all())
+    
+    def clear_priority(self, paper_id: int) -> None:
+        """Clear priority flag after summarization.
+        
+        Args:
+            paper_id: Paper database ID.
+        """
+        paper = self.get_by_id(paper_id)
+        if paper:
+            paper.priority_requested = False
+            self.session.commit()
 
 
 class UserRepository:
