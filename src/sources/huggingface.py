@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from src.infrastructure.http_client import get_client
+from src.models.paper import Paper
+from src.sources.base import BaseSource
 
 logger = logging.getLogger(__name__)
 
@@ -27,12 +29,43 @@ class HFPaper:
     categories: list[str] | None = None  # Filled after arXiv lookup
 
 
-class HuggingFaceSource:
+class HuggingFaceSource(BaseSource):
     """HuggingFace Daily Papers source.
 
     Fetches trending papers from HuggingFace Daily Papers API
     and filters by arXiv categories.
     """
+
+    @property
+    def source_name(self) -> str:
+        """Return unique identifier for this source."""
+        return "huggingface"
+
+    async def fetch_papers(self, limit: int = 10, **kwargs) -> list[Paper]:
+        """Fetch papers from HuggingFace and return as unified Paper objects.
+
+        Args:
+            limit: Maximum number of papers to return.
+            **kwargs: Additional parameters (ignored for compatibility).
+
+        Returns:
+            List of Paper objects.
+        """
+        hf_papers = await self.fetch_filtered_papers(limit=limit)
+        
+        papers = []
+        for hf in hf_papers:
+            papers.append(Paper(
+                source="huggingface",
+                source_id=hf.arxiv_id,
+                title=hf.title,
+                abstract=hf.summary,
+                authors=[],  # HF API doesn't provide authors list
+                published=hf.published_at,
+                url=f"https://arxiv.org/abs/{hf.arxiv_id}",
+                pdf_url=f"https://arxiv.org/pdf/{hf.arxiv_id}.pdf",
+            ))
+        return papers
 
     async def fetch_daily_papers(self, limit: int = 50) -> list[HFPaper]:
         """Fetch daily papers from HuggingFace.
