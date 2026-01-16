@@ -18,24 +18,45 @@ class PDFExtractor:
     PDFs are processed in memory without temporary files.
     """
 
-    async def download_pdf(self, pdf_url: str) -> bytes:
-        """Download PDF from arXiv.
+    async def download_pdf(self, pdf_url: str, max_retries: int = 3) -> bytes:
+        """Download PDF from arXiv with retry on transient errors.
         
         Args:
             pdf_url: URL to the PDF file (e.g., https://arxiv.org/pdf/2301.12345.pdf).
+            max_retries: Maximum number of retry attempts.
             
         Returns:
             Raw PDF bytes.
             
         Raises:
-            httpx.HTTPError: If download fails.
+            httpx.HTTPError: If download fails after all retries.
         """
-        logger.info(f"Downloading PDF: {pdf_url}")
+        import asyncio
+        import httpx
+        
         client = get_client()
-        response = await client.get(pdf_url, timeout=60.0, follow_redirects=True)
-        response.raise_for_status()
-        logger.info(f"Downloaded {len(response.content)} bytes")
-        return response.content
+        last_error: Exception | None = None
+        
+        for attempt in range(max_retries):
+            try:
+                logger.info(f"Downloading PDF: {pdf_url} (attempt {attempt + 1}/{max_retries})")
+                response = await client.get(pdf_url, timeout=60.0, follow_redirects=True)
+                response.raise_for_status()
+                logger.info(f"Downloaded {len(response.content)} bytes")
+                return response.content
+            except (httpx.TimeoutException, httpx.HTTPStatusError) as e:
+                last_error = e
+                # Only retry on server errors (5xx) or timeouts
+                if isinstance(e, httpx.HTTPStatusError) and e.response.status_code < 500:
+                    raise  # Client errors (4xx) should not be retried
+                
+                if attempt < max_retries - 1:
+                    wait_time = 2 ** attempt  # Exponential backoff: 1s, 2s, 4s
+                    logger.warning(f"PDF download failed: {e}. Retrying in {wait_time}s...")
+                    await asyncio.sleep(wait_time)
+        
+        # All retries exhausted
+        raise last_error  # type: ignore
 
     def extract_text(self, pdf_bytes: bytes) -> str:
         """Extract text from PDF using PyMuPDF.
