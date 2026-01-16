@@ -5,11 +5,12 @@ from src.llm.base import BaseLLMProvider
 from src.llm.mistral import MistralProvider
 
 
-def get_provider(provider_name: str | None = None) -> BaseLLMProvider:
+def get_provider(provider_name: str | None = None, **kwargs) -> BaseLLMProvider:
     """Get LLM provider by name.
 
     Args:
         provider_name: Provider identifier. Defaults to settings.LLM_PROVIDER.
+        **kwargs: Additional arguments for provider initialization (e.g. model).
 
     Returns:
         Configured LLM provider instance.
@@ -28,4 +29,4 @@ def get_provider(provider_name: str | None = None) -> BaseLLMProvider:
         supported = ", ".join(providers.keys())
         raise ValueError(f"Unknown provider: {provider_name}. Supported: {supported}")
 
-    return providers[provider_name]()
+    return providers[provider_name](**kwargs)

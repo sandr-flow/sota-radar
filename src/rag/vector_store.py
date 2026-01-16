@@ -66,6 +66,39 @@ class VectorStore:
             logger.info(f"Using collection '{self.collection_name}' with {self.collection.count()} documents")
         return VectorStore._collection
 
+    @property
+    def abstracts_collection(self) -> chromadb.Collection:
+        """Get or create abstracts collection."""
+        if not hasattr(self, "_abstracts_collection") or self._abstracts_collection is None:
+            self._abstracts_collection = self.client.get_or_create_collection(
+                name="abstracts",
+                metadata={"hnsw:space": "cosine"}
+            )
+            logger.info(f"Using collection 'abstracts' with {self._abstracts_collection.count()} documents")
+        return self._abstracts_collection
+
+    def add_abstract(self, paper_id: str, title: str, abstract: str) -> bool:
+        """Add paper abstract to abstracts collection.
+        
+        Args:
+            paper_id: Unique paper identifier.
+            title: Paper title.
+            abstract: Abstract text.
+        """
+        if not abstract:
+            return False
+            
+        # Generate embedding
+        embedding = self._embedding_model.embed_single(abstract)
+        
+        self.abstracts_collection.add(
+            ids=[paper_id],
+            embeddings=[embedding],
+            documents=[abstract],
+            metadatas=[{"paper_id": paper_id, "title": title}]
+        )
+        return True
+
     def add_paper_chunks(
         self,
         paper_id: str,

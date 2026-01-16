@@ -125,3 +125,15 @@ class MistralProvider(BaseLLMProvider):
         
         return result
 
+    async def generate_text(self, prompt: str) -> str:
+        """Generate a text response for the given prompt.
+        
+        Args:
+            prompt: User prompt.
+            
+        Returns:
+            Generated text response.
+        """
+        messages = [{"role": "user", "content": prompt}]
+        return await self._call_api(messages)
+

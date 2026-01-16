@@ -488,6 +488,31 @@ async def callback_deep_analysis(callback: CallbackQuery):
 
 
 
+
+@router.message(F.text)
+async def txt_smart_chat(message: Message):
+    """Handle generic text messages using Smart Chat pipeline."""
+    # Send typing action
+    await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
+    
+    try:
+        rag = RAGPipeline()
+        response = await rag.smart_chat(message.text)
+        
+        # Split long responses if needed (Telegram limit is 4096)
+        if len(response) > 4000:
+            parts = [response[i:i+4000] for i in range(0, len(response), 4000)]
+            for part in parts:
+                await message.answer(part, parse_mode="Markdown", disable_web_page_preview=True)
+        else:
+            await message.answer(response, parse_mode="Markdown", disable_web_page_preview=True)
+            
+    except Exception as e:
+        # Log error but don't crash
+        logging.getLogger(__name__).error(f"Smart chat failed: {e}", exc_info=True)
+        await message.answer("🤖...?", parse_mode=None)
+
+
 def register_handlers(dp: Dispatcher):
     """Register all handlers with dispatcher."""
     dp.include_router(router)

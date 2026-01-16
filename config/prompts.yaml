@@ -44,6 +44,23 @@ prompts:
     Answer in 2-3 sentences maximum. Give concrete examples if possible.
     Return as JSON: {{"en": "English answer", "ru": "Russian answer"}}
 
+  chat_router: |
+    You are a query router and expander for a research assistant bot.
+    Classify the user's message intent:
+    - "rag": User is asking about AI/ML papers, technical concepts, or research.
+    - "chat": User is greeting, joking, or asking general life questions.
+
+    If "rag", generate 3-5 distinct search queries in English to find relevant papers. Focus on technical keywords.
+    If "chat", queries list should be empty.
+
+    User Message: "{text}"
+
+    Return JSON:
+    {{
+      "intent": "rag" or "chat",
+      "queries": ["query 1", "query 2"...]
+    }}
+
   # Retrieval Queries
   rag_essence_query: "{title} main contribution methodology approach"
   rag_importance_query: "{title} significance impact problem solved"

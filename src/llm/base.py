@@ -45,4 +45,16 @@ class BaseLLMProvider(ABC):
         Raises:
             ValueError: If JSON parsing fails or response format is invalid.
         """
+        return sorted(results, key=lambda x: x["distance"])
+
+    @abstractmethod
+    async def generate_text(self, prompt: str) -> str:
+        """Generate a text response for the given prompt.
+
+        Args:
+            prompt: User prompt.
+
+        Returns:
+            Generated text response.
+        """
         pass

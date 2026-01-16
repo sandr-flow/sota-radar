@@ -170,8 +170,28 @@ class RAGPipeline:
                 "ru": "Релевантный контент не найден."
             }
         
-        # Build context from retrieved chunks
-        context = "\n\n".join([r["text"][:500] for r in results])  # Limit chunk size
+        # Enrich context with Abstract of the most relevant paper
+        # taking the top 1 paper ID
+        top_paper_meta = results[0].get("metadata", {})
+        top_paper_source_id = top_paper_meta.get("paper_id") # This is the source_id from the vector store
+        
+        abstract_text = ""
+        if top_paper_source_id:
+            try:
+                # Fetch abstract from abstracts collection (assuming abstracts are stored with source_id)
+                abs_result = self.vector_store.abstracts_collection.get(
+                    ids=[top_paper_source_id],
+                    include=["documents"]
+                )
+                if abs_result["documents"]:
+                    abstract_doc = abs_result["documents"][0]
+                    abstract_text = f"Abstract of {top_paper_meta.get('title', 'Paper')}:\n{abstract_doc}\n\n"
+            except Exception as e:
+                logger.warning(f"Failed to fetch abstract for {top_paper_source_id}: {e}")
+
+        # Build context from retrieved chunks, including abstract if available
+        chunks_text = "\n\n".join([r["text"][:500] for r in results])  # Limit chunk size
+        context = f"{abstract_text}Relevant excerpts:\n{chunks_text}"
         
         # Get prompt template
         prompt_template = self._prompts.get(prompt_key)
@@ -219,4 +239,104 @@ class RAGPipeline:
             results.append(answer)
         
         return results
+
+    async def smart_chat(self, user_message: str) -> str:
+        """Handle user chat message with intelligent routing (RAG vs Chat).
+        
+        Args:
+            user_message: User's input message.
+            
+        Returns:
+            Response text (with sources if RAG was used).
+        """
+        # 1. Router Step
+        try:
+            # Use small model for routing to save costs/latency
+            router_provider = get_provider(model="mistral-small-latest")
+            
+            router_prompt = self._prompts["chat_router"].format(text=user_message)
+            router_response = await router_provider.generate_json_response(router_prompt)
+            
+            intent = router_response.get("intent", "chat")
+            queries = router_response.get("queries", [])
+            
+            logger.info(f"🧠 Router: intent={intent}, generated {len(queries)} queries")
+            
+        except Exception as e:
+            logger.error(f"Router failed: {e}. Fallback to chat.")
+            intent = "chat"
+            queries = []
+
+        # 2. Execution Step
+        if intent == "rag" and queries:
+            try:
+                # Multi-Query Retrieval
+                all_results = []
+                seen_chunks = set()
+                
+                for q in queries:
+                    results = self.vector_store.query(query_text=q, n_results=3)
+                    for res in results:
+                        # Deduplicate by unique text content
+                        if res["text"] not in seen_chunks:
+                            seen_chunks.add(res["text"])
+                            all_results.append(res)
+                
+                # Take top 5 chunks
+                top_results = sorted(all_results, key=lambda x: x["distance"])[:5]
+                
+                if not top_results:
+                    intent = "chat"
+                else:
+                    # Enrich context with Abstract of the most relevant paper
+                    top_paper_meta = top_results[0].get("metadata", {})
+                    top_paper_id = top_paper_meta.get("paper_id")
+                    
+                    abstract_text = ""
+                    if top_paper_id:
+                        try:
+                            # Fetch abstract from abstracts collection
+                            abs_result = self.vector_store.abstracts_collection.get(
+                                ids=[top_paper_id],
+                                include=["documents"]
+                            )
+                            if abs_result["documents"]:
+                                abstract_doc = abs_result["documents"][0]
+                                abstract_text = f"Abstract of {top_paper_meta.get('title', 'Paper')}:\n{abstract_doc}\n\n"
+                        except Exception as e:
+                            logger.warning(f"Failed to fetch abstract for {top_paper_id}: {e}")
+
+                    # Generate RAG response
+                    chunks_text = "\n\n".join([r["text"] for r in top_results])
+                    context = f"{abstract_text}Relevant excerpts:\n{chunks_text}"
+                    
+                    # Collect sources
+                    sources = set()
+                    for r in top_results:
+                        meta = r.get("metadata", {})
+                        title = meta.get("title", "Unknown Paper")
+                        sources.add(title)
+                    
+                    sources_list = "\n".join([f"- {s}" for s in sources])
+                    
+                    rag_prompt = (
+                        f"Context from research papers:\n{context}\n\n"
+                        f"User Question: {user_message}\n\n"
+                        "Answer the question using the context above. "
+                        "If the context doesn't contain the answer, say so.\n"
+                        f"At the end, list the sources used:\n{sources_list}"
+                    )
+                    
+                    # Use large model for high quality answer
+                    generator_provider = get_provider(model="mistral-large-latest")
+                    response = await generator_provider.generate_text(rag_prompt)
+                    return response
+                    
+            except Exception as e:
+                logger.error(f"RAG failed: {e}. Fallback to chat.")
+                # Fallback to chat
+        
+        # Chat Fallback (or intent="chat")
+        chat_provider = get_provider(model="mistral-small-latest")
+        return await chat_provider.generate_text(user_message)
 
