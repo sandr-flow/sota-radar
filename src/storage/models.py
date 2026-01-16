@@ -26,7 +26,7 @@ class PaperModel(Base):
     title: Mapped[str] = mapped_column(Text, nullable=False)
     abstract: Mapped[str] = mapped_column(Text, nullable=False)
     authors: Mapped[str] = mapped_column(Text, nullable=False)  # JSON-encoded list
-    published: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    published: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
     url: Mapped[str] = mapped_column(String(500), nullable=False)
     pdf_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     
