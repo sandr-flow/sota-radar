@@ -57,7 +57,7 @@ class EmbeddingModel:
         return self.model.get_sentence_embedding_dimension()
 
     def embed(self, texts: list[str]) -> list[list[float]]:
-        """Generate embeddings for a list of texts.
+        """Generate embeddings for a list of texts (sync version).
         
         Args:
             texts: List of text strings to embed.
@@ -77,9 +77,23 @@ class EmbeddingModel:
         
         # Convert numpy arrays to lists for JSON serialization
         return embeddings.tolist()
+    
+    async def embed_async(self, texts: list[str]) -> list[list[float]]:
+        """Generate embeddings for a list of texts (async version).
+        
+        Runs CPU-bound encoding in a thread pool to avoid blocking event loop.
+        
+        Args:
+            texts: List of text strings to embed.
+            
+        Returns:
+            List of embedding vectors (as lists of floats).
+        """
+        import asyncio
+        return await asyncio.to_thread(self.embed, texts)
 
     def embed_single(self, text: str) -> list[float]:
-        """Generate embedding for a single text.
+        """Generate embedding for a single text (sync version).
         
         Args:
             text: Text string to embed.
@@ -88,3 +102,16 @@ class EmbeddingModel:
             Embedding vector as list of floats.
         """
         return self.embed([text])[0]
+    
+    async def embed_single_async(self, text: str) -> list[float]:
+        """Generate embedding for a single text (async version).
+        
+        Args:
+            text: Text string to embed.
+            
+        Returns:
+            Embedding vector as list of floats.
+        """
+        result = await self.embed_async([text])
+        return result[0]
+
