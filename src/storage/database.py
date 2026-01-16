@@ -1,5 +1,7 @@
 """Database connection and session management."""
 
+from contextlib import contextmanager
+
 from sqlalchemy import Engine, create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -39,6 +41,32 @@ def get_session() -> Session:
     engine = get_engine()
     SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
     return SessionLocal()
+
+
+@contextmanager
+def session_scope():
+    """Provide transactional scope around a series of operations.
+    
+    Automatically handles commit, rollback, and session cleanup.
+    
+    Usage:
+        with session_scope() as session:
+            repo = PaperRepository(session)
+            papers = repo.get_recent()
+    
+    Yields:
+        SQLAlchemy session.
+    """
+    init_db()
+    session = get_session()
+    try:
+        yield session
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
 
 
 def init_db():

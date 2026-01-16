@@ -1,6 +1,6 @@
 """Storage package for sota-radar."""
 
-from src.storage.database import get_engine, get_session, init_db
+from src.storage.database import get_engine, get_session, init_db, session_scope
 from src.storage.models import Base, PaperModel, UserModel
 from src.storage.repository import PaperRepository, UserRepository
 
@@ -13,5 +13,5 @@ __all__ = [
     "get_engine",
     "get_session",
     "init_db",
+    "session_scope",
 ]
-
