@@ -52,6 +52,54 @@ def get_language_keyboard() -> InlineKeyboardMarkup:
     ])
 
 
+def format_paper_response(
+    paper_data: dict,
+    lang: str,
+    summary_text: str | None = None,
+) -> tuple[str, InlineKeyboardMarkup | None]:
+    """Format paper response with optional summary.
+
+    Args:
+        paper_data: Dict with title, url, pdf_url, and optionally id.
+        lang: User language code.
+        summary_text: Parsed summary text (already extracted from JSON).
+
+    Returns:
+        Tuple of (response_text, keyboard or None).
+    """
+    title = html.escape(paper_data["title"])
+
+    if summary_text:
+        summary = html.escape(summary_text)
+        response = (
+            f"<b>{title}</b>\n\n"
+            f"📝 {summary}\n\n"
+            f"{get_text('links', lang)}\n"
+            f"• <a href=\"{paper_data['url']}\">arXiv</a>\n"
+            f"• <a href=\"{paper_data['pdf_url']}\">PDF</a>"
+        )
+        # Deep Analysis button (only if paper has id)
+        keyboard = None
+        if paper_data.get("id"):
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(
+                    text=get_text("deep_analysis_btn", lang),
+                    callback_data=f"deep:{paper_data['id']}"
+                )]
+            ])
+    else:
+        response = (
+            f"<b>{title}</b>\n\n"
+            f"{get_text('summary_pending', lang)}\n\n"
+            f"{get_text('links', lang)}\n"
+            f"• <a href=\"{paper_data['url']}\">arXiv</a>\n"
+            f"• <a href=\"{paper_data['pdf_url']}\">PDF</a>"
+        )
+        keyboard = None
+
+    return response, keyboard
+
+
 @router.message(Command("start"))
 async def cmd_start(message: Message):
     """Handle /start command with language selection."""
@@ -235,46 +283,19 @@ async def callback_paper(callback: CallbackQuery):
 
     await callback.answer()
 
-    # Parse summary JSON
+    # Parse summary JSON and format response
+    summary_text = None
     if paper_data["summary_json"]:
         try:
             summaries = json.loads(paper_data["summary_json"])
-            summary = summaries.get(lang, summaries.get("en", get_text("no_summary", lang)))
+            summary_text = summaries.get(lang, summaries.get("en", get_text("no_summary", lang)))
         except json.JSONDecodeError:
-            summary = paper_data["summary_json"]  # Fallback for old plain text
-        
-        # Build response
-        title = html.escape(paper_data["title"])
-        summary = html.escape(summary)  # Escape to ensure plain text display
-        
-        response = (
-            f"<b>{title}</b>\n\n"
-            f"📝 {summary}\n\n"
-            f"{get_text('links', lang)}\n"
-            f"• <a href=\"{paper_data['url']}\">arXiv</a>\n"
-            f"• <a href=\"{paper_data['pdf_url']}\">PDF</a>"
-        )
-
-        # Create Deep Analysis button
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(
-                text=get_text("deep_analysis_btn", lang),
-                callback_data=f"deep:{paper_id}"
-            )]
-        ])
+            summary_text = paper_data["summary_json"]  # Fallback for old plain text
     else:
         # No summary yet - add to priority queue
         add_to_priority_queue(paper_data["id"])
-        
-        title = html.escape(paper_data["title"])
-        response = (
-            f"<b>{title}</b>\n\n"
-            f"{get_text('summary_pending', lang)}\n\n"
-            f"{get_text('links', lang)}\n"
-            f"• <a href=\"{paper_data['url']}\">arXiv</a>\n"
-            f"• <a href=\"{paper_data['pdf_url']}\">PDF</a>"
-        )
-        keyboard = None
+
+    response, keyboard = format_paper_response(paper_data, lang, summary_text)
 
 
     user_id = callback.from_user.id
@@ -309,10 +330,7 @@ async def callback_paper(callback: CallbackQuery):
 async def callback_hf_paper(callback: CallbackQuery):
     """Handle HuggingFace paper selection - show paper info by arXiv ID."""
     arxiv_id = callback.data.split(":")[1]
-    
-    # Import here to avoid circular imports
-    # (Moved to top level)
-    
+
     # Extract paper data inside session scope to avoid DetachedInstanceError
     paper_data = None
     with session_scope() as session:
@@ -338,46 +356,19 @@ async def callback_hf_paper(callback: CallbackQuery):
     await callback.answer()
 
     if paper_data:
-        # Paper is in DB
+        # Paper is in DB - parse summary and format
+        summary_text = None
         if paper_data["summary_json"]:
-            # Has summary - show it
             try:
                 summaries = json.loads(paper_data["summary_json"])
-                summary = summaries.get(lang, summaries.get("en", get_text("no_summary", lang)))
+                summary_text = summaries.get(lang, summaries.get("en", get_text("no_summary", lang)))
             except json.JSONDecodeError:
-                summary = paper_data["summary_json"]
-            
-            title = html.escape(paper_data["title"])
-            summary = html.escape(summary)
-            
-            response = (
-                f"<b>{title}</b>\n\n"
-                f"📝 {summary}\n\n"
-                f"{get_text('links', lang)}\n"
-                f"• <a href=\"{paper_data['url']}\">arXiv</a>\n"
-                f"• <a href=\"{paper_data['pdf_url']}\">PDF</a>"
-            )
-
-            # Create Deep Analysis button
-            keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(
-                    text=get_text("deep_analysis_btn", lang),
-                    callback_data=f"deep:{paper_data['id']}"
-                )]
-            ])
+                summary_text = paper_data["summary_json"]
         else:
             # No summary yet - add to priority queue
             add_to_priority_queue(paper_data["id"])
-            
-            title = html.escape(paper_data["title"])
-            response = (
-                f"<b>{title}</b>\n\n"
-                f"{get_text('summary_pending', lang)}\n\n"
-                f"{get_text('links', lang)}\n"
-                f"• <a href=\"{paper_data['url']}\">arXiv</a>\n"
-                f"• <a href=\"{paper_data['pdf_url']}\">PDF</a>"
-            )
-            keyboard = None
+
+        response, keyboard = format_paper_response(paper_data, lang, summary_text)
     else:
         # Paper not in DB, show basic info with links only
         url = f"https://arxiv.org/abs/{arxiv_id}"

@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     # RAG / Vector Store
     CHROMA_PERSIST_DIR: Path = DATA_DIR / "chroma"
     EMBEDDING_MODEL: str = "all-mpnet-base-v2"
+    EMBEDDING_OFFLINE_MODE: bool = True  # Skip huggingface.co checks if model cached
     CHUNK_SIZE: int = 512
     CHUNK_OVERLAP: int = 64
     

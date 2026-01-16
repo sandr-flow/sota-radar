@@ -35,7 +35,19 @@ class EmbeddingModel:
         """Get or load the embedding model (lazy loading)."""
         if EmbeddingModel._model is None:
             logger.info(f"Loading embedding model: {self.model_name}")
-            EmbeddingModel._model = SentenceTransformer(self.model_name)
+            # Use local_files_only to skip huggingface.co checks if model cached
+            local_only = getattr(settings, "EMBEDDING_OFFLINE_MODE", False)
+            try:
+                EmbeddingModel._model = SentenceTransformer(
+                    self.model_name,
+                    local_files_only=local_only
+                )
+            except Exception as e:
+                if local_only:
+                    logger.warning(f"Offline load failed, trying online: {e}")
+                    EmbeddingModel._model = SentenceTransformer(self.model_name)
+                else:
+                    raise
             logger.info(f"Model loaded. Embedding dimension: {self.embedding_dim}")
         return EmbeddingModel._model
 
