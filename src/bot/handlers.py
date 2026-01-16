@@ -185,25 +185,32 @@ async def cmd_digest(message: Message):
 @router.message(Command("latest"))
 async def cmd_latest(message: Message):
     """Handle /latest command - show recent papers from DB."""
+    # Extract paper data inside session scope
+    papers_data = []
     with session_scope() as session:
         repo = PaperRepository(session)
         user_repo = UserRepository(session)
         lang = user_repo.get_language(message.from_user.id)
         # Get recent papers
         papers = repo.get_recent(limit=10)
+        for paper in papers:
+            papers_data.append({
+                "id": paper.id,
+                "title": paper.title,
+            })
 
-    if not papers:
+    if not papers_data:
         await message.answer(get_text("no_papers", lang))
         return
 
     # Build inline keyboard with paper titles
     buttons = []
-    for paper in papers:
-        title = paper.title[:60] + "..." if len(paper.title) > 60 else paper.title
+    for paper in papers_data:
+        title = paper["title"][:60] + "..." if len(paper["title"]) > 60 else paper["title"]
         buttons.append([
             InlineKeyboardButton(
                 text=title,
-                callback_data=f"paper:{paper.id}",
+                callback_data=f"paper:{paper['id']}",
             )
         ])
 
@@ -222,36 +229,47 @@ async def callback_paper(callback: CallbackQuery):
     """Handle paper selection callback - show full summary."""
     paper_id = int(callback.data.split(":")[1])
     
+    # Extract paper data inside session scope
+    paper_data = None
     with session_scope() as session:
         repo = PaperRepository(session)
         user_repo = UserRepository(session)
         lang = user_repo.get_language(callback.from_user.id)
         paper = repo.get_by_id(paper_id)
+        
+        if paper:
+            paper_data = {
+                "id": paper.id,
+                "title": paper.title,
+                "url": paper.url,
+                "pdf_url": paper.pdf_url,
+                "summary_json": paper.summary_json,
+            }
 
-    if not paper:
+    if not paper_data:
         await callback.answer("Paper not found", show_alert=True)
         return
 
     await callback.answer()
 
     # Parse summary JSON
-    if paper.summary_json:
+    if paper_data["summary_json"]:
         try:
-            summaries = json.loads(paper.summary_json)
+            summaries = json.loads(paper_data["summary_json"])
             summary = summaries.get(lang, summaries.get("en", get_text("no_summary", lang)))
         except json.JSONDecodeError:
-            summary = paper.summary_json  # Fallback for old plain text
+            summary = paper_data["summary_json"]  # Fallback for old plain text
         
         # Build response
-        title = html.escape(paper.title)
+        title = html.escape(paper_data["title"])
         summary = html.escape(summary)  # Escape to ensure plain text display
         
         response = (
             f"<b>{title}</b>\n\n"
             f"📝 {summary}\n\n"
             f"{get_text('links', lang)}\n"
-            f"• <a href=\"{paper.url}\">arXiv</a>\n"
-            f"• <a href=\"{paper.pdf_url}\">PDF</a>"
+            f"• <a href=\"{paper_data['url']}\">arXiv</a>\n"
+            f"• <a href=\"{paper_data['pdf_url']}\">PDF</a>"
         )
 
         # Create Deep Analysis button
@@ -264,15 +282,15 @@ async def callback_paper(callback: CallbackQuery):
     else:
         # No summary yet - add to priority queue
         from src.pipeline.priority_queue import add_to_priority_queue
-        add_to_priority_queue(paper.id)
+        add_to_priority_queue(paper_data["id"])
         
-        title = html.escape(paper.title)
+        title = html.escape(paper_data["title"])
         response = (
             f"<b>{title}</b>\n\n"
             f"{get_text('summary_pending', lang)}\n\n"
             f"{get_text('links', lang)}\n"
-            f"• <a href=\"{paper.url}\">arXiv</a>\n"
-            f"• <a href=\"{paper.pdf_url}\">PDF</a>"
+            f"• <a href=\"{paper_data['url']}\">arXiv</a>\n"
+            f"• <a href=\"{paper_data['pdf_url']}\">PDF</a>"
         )
         keyboard = None
 
@@ -426,13 +444,21 @@ async def callback_deep_analysis(callback: CallbackQuery):
     """Handle Deep Analysis button - run RAG pipeline with 3 short messages."""
     paper_id = int(callback.data.split(":")[1])
     
+    # Extract paper data inside session scope
+    paper_data = None
     with session_scope() as session:
         user_repo = UserRepository(session)
         repo = PaperRepository(session)
         lang = user_repo.get_language(callback.from_user.id)
         paper = repo.get_by_id(paper_id)
+        if paper:
+            paper_data = {
+                "title": paper.title,
+                "url": paper.url,
+                "pdf_url": paper.pdf_url,
+            }
 
-    if not paper:
+    if not paper_data:
         await callback.answer("Paper not found", show_alert=True)
         return
 
@@ -448,7 +474,7 @@ async def callback_deep_analysis(callback: CallbackQuery):
         from src.rag import RAGPipeline
         
         rag = RAGPipeline()
-        title = html.escape(paper.title[:80])
+        title = html.escape(paper_data["title"][:80])
         
         # Question headers
         headers = [
@@ -474,8 +500,8 @@ async def callback_deep_analysis(callback: CallbackQuery):
             if i == 2:
                 msg_content += (
                     f"\n\n{get_text('links', lang)}\n"
-                    f"• <a href=\"{paper.url}\">arXiv</a> "
-                    f"• <a href=\"{paper.pdf_url}\">PDF</a>"
+                    f"• <a href=\"{paper_data['url']}\">arXiv</a> "
+                    f"• <a href=\"{paper_data['pdf_url']}\">PDF</a>"
                 )
             
             await callback.message.answer(
