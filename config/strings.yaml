@@ -17,6 +17,9 @@ strings:
     q3_header: "🛠 <b>Where can this be applied?</b> (3/3)"
     loading_trending: "🔄 Loading trending papers..."
     summary_pending: "⏳ Summary is being generated. Try again in a minute."
+    tap_read_more: "Tap 👇 to read full summary"
+    read: "Read"
+    loading: "🔄 Loading..."
 
   ru:
     welcome: "👋 Добро пожаловать в <b>sota-radar</b>!\n\nЯ доставляю AI/ML саммари статей с arXiv.\n\nВыберите язык:"
@@ -36,3 +39,6 @@ strings:
     q3_header: "🛠 <b>Где применимо?</b> (3/3)"
     loading_trending: "🔄 Загружаю трендовые статьи..."
     summary_pending: "⏳ Саммари формируется. Попробуйте через минуту."
+    tap_read_more: "Нажмите 👇 для полного саммари"
+    read: "Читать"
+    loading: "🔄 Загрузка..."

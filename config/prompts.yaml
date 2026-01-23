@@ -1,19 +1,20 @@
 prompts:
   bilingual_summary: |
     You are a scientific paper summarization assistant. Generate a concise summary of the following research paper abstract in both English and Russian.
-    
+
     Requirements:
-    - Summarize in 2-3 sentences per language
-    - Focus on: main contribution, method, and key results
-    - Keep each summary under {max_length} characters
+    - Exactly 1-2 sentences per language (STRICT)
+    - Focus ONLY on: main contribution + key result
+    - Maximum {max_length} characters per language (STRICT LIMIT)
     - Use plain text only, no formatting or markup
-    
+    - Be concise and direct
+
     Return your response as a JSON object with this exact structure:
     {{
       "en": "English summary here...",
       "ru": "Russian summary here..."
     }}
-    
+
     Abstract:
     {text}
 

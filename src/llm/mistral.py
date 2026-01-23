@@ -102,7 +102,7 @@ class MistralProvider(BaseLLMProvider):
         except json.JSONDecodeError as e:
             raise ValueError(f"Failed to parse JSON response: {e}") from e
 
-    async def generate_bilingual_summary(self, text: str, max_length: int = 500) -> dict[str, str]:
+    async def generate_bilingual_summary(self, text: str, max_length: int = 250) -> dict[str, str]:
         """Generate bilingual summary (EN + RU) for paper abstract in one call.
 
         Args:
