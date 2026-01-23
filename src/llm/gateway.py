@@ -1,5 +1,7 @@
 """LLM Gateway factory for provider selection."""
 
+from __future__ import annotations
+
 from src.config.settings import settings
 from src.llm.base import BaseLLMProvider
 from src.llm.mistral import MistralProvider

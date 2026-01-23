@@ -91,21 +91,22 @@ def init_db():
 
 def _run_migrations(engine: Engine):
     """Run schema migrations for existing databases.
-    
+
     Adds missing columns that were added after initial schema creation.
+    Uses SQLAlchemy's text() for safe SQL execution with hardcoded values only.
     """
     from sqlalchemy import text, inspect
-    
+
     inspector = inspect(engine)
-    
+
     # Check papers table for priority_requested column
     if "papers" in inspector.get_table_names():
         columns = [col["name"] for col in inspector.get_columns("papers")]
-        
+
         if "priority_requested" not in columns:
-            with engine.connect() as conn:
+            # Use begin() for automatic transaction management
+            with engine.begin() as conn:
                 conn.execute(text(
                     "ALTER TABLE papers ADD COLUMN priority_requested BOOLEAN DEFAULT 0 NOT NULL"
                 ))
-                conn.commit()
 

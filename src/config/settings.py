@@ -41,6 +41,24 @@ class Settings(BaseSettings):
     CHUNK_SIZE: int = 512
     CHUNK_OVERLAP: int = 64
     
+    @field_validator("TELEGRAM_BOT_TOKEN", "MISTRAL_API_KEY")
+    @classmethod
+    def validate_no_placeholder_tokens(cls, v: str) -> str:
+        """Validate API keys are not placeholder values."""
+        placeholder_values = {
+            "your_token_here",
+            "your_bot_token_here",
+            "your_mistral_api_key_here",
+            "replace_with_actual_token",
+            "",
+            " ",
+        }
+        if v.lower().strip() in placeholder_values or len(v) < 10:
+            raise ValueError(
+                f"API key appears to be a placeholder. Please set a valid value in .env"
+            )
+        return v
+
     @field_validator("PIPELINE_INTERVAL_MINUTES")
     @classmethod
     def validate_pipeline_interval(cls, v: int) -> int:
@@ -48,7 +66,7 @@ class Settings(BaseSettings):
         if v <= 0:
             raise ValueError("PIPELINE_INTERVAL_MINUTES must be > 0")
         return v
-    
+
     @field_validator("PAPERS_PER_DIGEST")
     @classmethod
     def validate_papers_per_digest(cls, v: int) -> int:
