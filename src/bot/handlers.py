@@ -3,10 +3,9 @@
 import html
 import json
 import logging
-import yaml
 from aiogram import Dispatcher, F, Router
 from aiogram.filters import Command
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
+from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 from sqlalchemy import select
 
 from src.config.settings import settings
@@ -15,6 +14,8 @@ from src.rag import RAGPipeline
 from src.sources.huggingface import HuggingFaceSource
 from src.storage import session_scope, PaperRepository, UserRepository
 from src.storage.models import PaperModel
+from src.bot.gallery import get_gallery_manager
+from src.bot.utils import get_text, get_language_keyboard
 
 router = Router()
 
@@ -22,124 +23,10 @@ router = Router()
 # Format: {user_id: message_id}
 _summary_messages: dict[int, int] = {}
 
-# Gallery state per chat (in-memory, lost on restart)
-# Format: {chat_id: {"source": "hf"|"db", "papers": [paper_dicts], "index": int}}
-_galleries: dict[int, dict] = {}
-
 # UI constants for text truncation
 TITLE_MAX_LENGTH = 55
 BUTTON_MAX_LENGTH = 60
 TITLE_DISPLAY_LENGTH = 80
-
-# Load localization strings from YAML
-def _load_strings() -> dict[str, dict[str, str]]:
-    """Load localization strings from config/strings.yaml."""
-    strings_path = settings.BASE_DIR / "config" / "strings.yaml"
-    with open(strings_path, encoding="utf-8") as f:
-        return yaml.safe_load(f).get("strings", {})
-
-STRINGS = _load_strings()
-
-
-def get_text(key: str, lang: str) -> str:
-    """Get localized string."""
-    return STRINGS.get(lang, STRINGS["en"]).get(key, STRINGS["en"].get(key, key))
-
-
-def get_language_keyboard() -> InlineKeyboardMarkup:
-    """Create language selection keyboard."""
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text="🇬🇧 English", callback_data="lang:en"),
-            InlineKeyboardButton(text="🇷🇺 Русский", callback_data="lang:ru"),
-        ]
-    ])
-
-
-def create_gallery_message(paper: dict, index: int, total: int, lang: str, source: str, summary_preview: str | None = None, paper_id: int | None = None, arxiv_id: str | None = None, url: str | None = None, pdf_url: str | None = None) -> tuple[str, InlineKeyboardMarkup]:
-    """Create gallery message for a single paper.
-
-    Args:
-        paper: Paper dict with title, upvotes (for HF), arxiv_id/id.
-        index: Current paper index (0-based).
-        total: Total number of papers.
-        lang: User language code.
-        source: "hf" or "db".
-        summary_preview: Summary text preview (optional).
-        paper_id: Database paper ID for deep analysis (optional).
-        arxiv_id: arXiv ID for link generation (optional).
-        url: Paper URL (optional).
-        pdf_url: PDF URL (optional).
-
-    Returns:
-        Tuple of (message_text, reply_markup).
-    """
-    title = html.escape(paper["title"])
-
-    # Build header with upvotes for HF
-    if source == "hf":
-        upvotes = paper.get("upvotes", 0)
-        upvotes_text = f"🔥 {upvotes} " if upvotes > 0 else ""
-        header = f"<b>{upvotes_text}{title}</b>"
-    else:
-        header = f"<b>{title}</b>"
-
-    # Summary preview or placeholder
-    if summary_preview:
-        preview = html.escape(summary_preview)
-    else:
-        preview = f"<i>{get_text('summary_pending', lang)}</i>"
-
-    message = f"{header}\n\n{preview}"
-
-    # Add links if available
-    if url and pdf_url:
-        message += (
-            f"\n\n{get_text('links', lang)}\n"
-            f"• <a href=\"{url}\">arXiv</a> "
-            f"• <a href=\"{pdf_url}\">PDF</a>"
-        )
-    elif arxiv_id:
-        url = f"https://arxiv.org/abs/{arxiv_id}"
-        pdf_url = f"https://arxiv.org/pdf/{arxiv_id}.pdf"
-        message += (
-            f"\n\n{get_text('links', lang)}\n"
-            f"• <a href=\"{url}\">arXiv</a> "
-            f"• <a href=\"{pdf_url}\">PDF</a>"
-        )
-
-    # Navigation buttons
-    nav_buttons = []
-    nav_row = []
-
-    # Previous button
-    prev_idx = (index - 1) % total
-    nav_row.append(
-        InlineKeyboardButton(text="◀", callback_data=f"gallery_{source}:{prev_idx}")
-    )
-
-    # Counter button (non-clickable - empty callback_data)
-    nav_row.append(
-        InlineKeyboardButton(text=f"{index + 1}/{total}", callback_data=f"gallery_counter:{index}")
-    )
-
-    # Next button
-    next_idx = (index + 1) % total
-    nav_row.append(
-        InlineKeyboardButton(text="▶", callback_data=f"gallery_{source}:{next_idx}")
-    )
-
-    nav_buttons.append(nav_row)
-
-    # Deep Analysis button (only if paper_id exists)
-    if paper_id:
-        nav_buttons.append([
-            InlineKeyboardButton(text=get_text("deep_analysis_btn", lang), callback_data=f"deep:{paper_id}")
-        ])
-
-    keyboard = InlineKeyboardMarkup(inline_keyboard=nav_buttons)
-
-    return message, keyboard
 
 
 def format_paper_response(
@@ -315,26 +202,26 @@ async def cmd_digest(message: Message):
         papers_dicts.append(paper_data)
 
     # Store gallery state
+    gallery_manager = get_gallery_manager()
     chat_id = message.chat.id
-    _galleries[chat_id] = {
-        "source": "hf",
-        "papers": papers_dicts,
-        "index": 0,
-        "message_id": loading_msg.message_id,
-    }
+    gallery_manager.create_gallery(
+        chat_id=chat_id,
+        source="hf",
+        papers=papers_dicts,
+        index=0,
+        message_id=loading_msg.message_id,
+    )
 
     # Show first paper
-    summary_preview = papers_dicts[0].get("summary")
-    paper_id = papers_dicts[0].get("db_id")
-    arxiv_id = papers_dicts[0]["arxiv_id"]
-    text, keyboard = create_gallery_message(papers_dicts[0], 0, len(papers_dicts), lang, "hf", summary_preview, paper_id, arxiv_id)
-
-    await loading_msg.edit_text(
-        text,
-        parse_mode="HTML",
-        reply_markup=keyboard,
-        disable_web_page_preview=True,
-    )
+    result = gallery_manager.navigate(chat_id, 0, lang)
+    if result:
+        text, keyboard, _ = result
+        await loading_msg.edit_text(
+            text,
+            parse_mode="HTML",
+            reply_markup=keyboard,
+            disable_web_page_preview=True,
+        )
 
 
 @router.message(Command("latest"))
@@ -372,26 +259,28 @@ async def cmd_latest(message: Message):
         return
 
     # Store gallery state
+    gallery_manager = get_gallery_manager()
     chat_id = message.chat.id
     sent_msg = await message.answer(get_text("loading", lang))
 
-    _galleries[chat_id] = {
-        "source": "db",
-        "papers": papers_data,
-        "index": 0,
-        "message_id": sent_msg.message_id,
-    }
+    gallery_manager.create_gallery(
+        chat_id=chat_id,
+        source="db",
+        papers=papers_data,
+        index=0,
+        message_id=sent_msg.message_id,
+    )
 
     # Show first paper
-    summary_preview = papers_data[0].get("summary")
-    text, keyboard = create_gallery_message(papers_data[0], 0, len(papers_data), lang, "db", summary_preview, papers_data[0]["id"], url=papers_data[0]["url"], pdf_url=papers_data[0]["pdf_url"])
-
-    await sent_msg.edit_text(
-        text,
-        parse_mode="HTML",
-        reply_markup=keyboard,
-        disable_web_page_preview=True,
-    )
+    result = gallery_manager.navigate(chat_id, 0, lang)
+    if result:
+        text, keyboard, _ = result
+        await sent_msg.edit_text(
+            text,
+            parse_mode="HTML",
+            reply_markup=keyboard,
+            disable_web_page_preview=True,
+        )
 
 
 
@@ -406,42 +295,23 @@ async def callback_gallery_navigate(callback: CallbackQuery):
     """Handle gallery navigation callbacks."""
     # Parse callback data: gallery_hf:2 or gallery_db:1
     parts = callback.data.split(":")
-    source = parts[0].replace("gallery_", "")  # "hf" or "db"
     index = int(parts[1])
 
     chat_id = callback.message.chat.id
-
-    # Get gallery state
-    gallery = _galleries.get(chat_id)
-    if not gallery:
-        await callback.answer("Gallery expired. Run command again.", show_alert=True)
-        return
-
-    # Update index
-    gallery["index"] = index
-    papers = gallery["papers"]
+    gallery_manager = get_gallery_manager()
 
     # Get user language
     with session_scope() as session:
         user_repo = UserRepository(session)
         lang = user_repo.get_language(callback.from_user.id)
 
-    # Get summary, paper_id, and links from paper dict
-    paper = papers[index]
-    summary_preview = paper.get("summary")
+    # Navigate to index
+    result = gallery_manager.navigate(chat_id, index, lang)
+    if not result:
+        await callback.answer("Gallery expired. Run command again.", show_alert=True)
+        return
 
-    if source == "hf":
-        paper_id = paper.get("db_id")
-        arxiv_id = paper["arxiv_id"]
-        url, pdf_url = None, None
-    else:  # db
-        paper_id = paper["id"]
-        arxiv_id = None
-        url = paper.get("url")
-        pdf_url = paper.get("pdf_url")
-
-    # Generate new message
-    text, keyboard = create_gallery_message(paper, index, len(papers), lang, source, summary_preview, paper_id, arxiv_id, url, pdf_url)
+    text, keyboard, _ = result
 
     await callback.answer()
     await callback.message.edit_text(
