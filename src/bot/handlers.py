@@ -3,12 +3,15 @@
 import html
 import json
 import logging
+import xml.etree.ElementTree as ET
+from datetime import datetime
 from aiogram import Dispatcher, F, Router
 from aiogram.filters import Command
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 from sqlalchemy import select
 
 from src.config.settings import settings
+from src.infrastructure.http_client import get_client
 from src.pipeline.priority_queue import add_to_priority_queue
 from src.rag import RAGPipeline
 from src.sources.huggingface import HuggingFaceSource
@@ -16,8 +19,10 @@ from src.storage import session_scope, PaperRepository, UserRepository
 from src.storage.models import PaperModel
 from src.bot.gallery import get_gallery_manager
 from src.bot.utils import get_text, get_language_keyboard
+from src.utils.date_utils import parse_iso_date
 
 router = Router()
+logger = logging.getLogger(__name__)
 
 # Track summary message IDs per user (in-memory, lost on restart)
 # Format: {user_id: message_id}
@@ -27,6 +32,54 @@ _summary_messages: dict[int, int] = {}
 TITLE_MAX_LENGTH = 55
 BUTTON_MAX_LENGTH = 60
 TITLE_DISPLAY_LENGTH = 80
+
+
+async def _fetch_arxiv_paper_data(arxiv_id: str) -> dict | None:
+    """Fetch paper data from arXiv API.
+
+    Args:
+        arxiv_id: arXiv paper ID.
+
+    Returns:
+        Dict with abstract, authors, published or None if not found.
+    """
+    client = get_client()
+    url = f"https://export.arxiv.org/api/query?id_list={arxiv_id}"
+
+    try:
+        response = await client.get(url)
+        response.raise_for_status()
+
+        root = ET.fromstring(response.text)
+        ns = {"atom": "http://www.w3.org/2005/Atom", "arxiv": "http://arxiv.org/schemas/atom"}
+
+        entry = root.find("atom:entry", ns)
+        if entry is None:
+            return None
+
+        # Get abstract
+        summary = entry.find("atom:summary", ns)
+        abstract = summary.text if summary is not None else None
+
+        # Get authors
+        authors = []
+        for author in entry.findall("atom:author", ns):
+            name = author.find("atom:name", ns)
+            if name is not None:
+                authors.append(name.text)
+
+        # Get published date
+        published = entry.find("atom:published", ns)
+        published_str = published.text if published is not None else None
+
+        return {
+            "abstract": abstract,
+            "authors": authors,
+            "published": published_str,
+        }
+    except Exception as e:
+        logger.warning(f"Failed to fetch paper data for {arxiv_id}: {e}")
+        return None
 
 
 def format_paper_response(
@@ -167,17 +220,55 @@ async def cmd_digest(message: Message):
         await loading_msg.edit_text(get_text("no_trending", lang))
         return
 
-    # Fetch summaries from DB
+    # Fetch or create papers in DB, load summaries
     arxiv_ids = [p.arxiv_id for p in papers]
     summaries_map = {}
+    papers_to_queue = []
 
     with session_scope() as session:
+        repo = PaperRepository(session)
+
         for arxiv_id in arxiv_ids:
+            # Find paper in DB
             stmt = select(PaperModel).where(
                 PaperModel.source == "arxiv",
                 PaperModel.source_id.like(f"{arxiv_id}%")
             )
             paper = session.execute(stmt).scalars().first()
+
+            # Create paper if not exists
+            if not paper:
+                # Find corresponding HF paper
+                hf_paper = next((p for p in papers if p.arxiv_id == arxiv_id), None)
+                if hf_paper:
+                    # Fetch all data from arXiv API
+                    paper_data = await _fetch_arxiv_paper_data(arxiv_id)
+                    if not paper_data:
+                        logger.warning(f"Could not fetch data for {arxiv_id}, skipping")
+                        continue
+
+                    # Parse published date
+                    published = None
+                    if paper_data["published"]:
+                        published = parse_iso_date(paper_data["published"])
+
+                    # Create paper record
+                    paper = PaperModel(
+                        source="arxiv",
+                        source_id=arxiv_id,
+                        title=hf_paper.title,
+                        abstract=paper_data["abstract"],
+                        authors=json.dumps(paper_data["authors"]) if paper_data["authors"] else "[]",
+                        published=datetime.now(),  # Временно используем текущую дату
+                        url=f"https://arxiv.org/abs/{arxiv_id}",
+                        pdf_url=f"https://arxiv.org/pdf/{arxiv_id}.pdf",
+                        summary_json=None,
+                    )
+                    session.add(paper)
+                    session.flush()  # Get ID
+                    logger.info(f"Created DB record for HF paper: {arxiv_id}")
+
+            # Check if has summary
             if paper and paper.summary_json:
                 try:
                     summaries = json.loads(paper.summary_json)
@@ -187,6 +278,53 @@ async def cmd_digest(message: Message):
                     }
                 except json.JSONDecodeError:
                     pass
+            elif paper and not paper.summary_json:
+                # Add to priority queue
+                papers_to_queue.append(paper.id)
+
+    # Add papers without summary to priority queue and generate them immediately
+    if papers_to_queue:
+        for paper_id in papers_to_queue:
+            add_to_priority_queue(paper_id)
+            logger.info(f"Added HF paper {paper_id} to priority queue")
+
+        # Wait for summaries to be generated (priority queue processing)
+        # This ensures digest papers have summaries before showing gallery
+        await loading_msg.edit_text(
+            get_text("summary_pending", lang),
+            parse_mode="HTML",
+        )
+        from src.pipeline.priority_queue import process_priority_queue
+
+        success, errors = await process_priority_queue()
+        logger.info(f"Digest summary generation: {success} success, {errors} errors")
+
+        # Reload summaries after generation
+        summaries_map = {}
+        papers_to_queue = []
+
+        with session_scope() as session:
+            repo = PaperRepository(session)
+
+            for arxiv_id in arxiv_ids:
+                # Find paper in DB
+                stmt = select(PaperModel).where(
+                    PaperModel.source == "arxiv",
+                    PaperModel.source_id.like(f"{arxiv_id}%")
+                )
+                paper = session.execute(stmt).scalars().first()
+
+                if paper:
+                    # Check if has summary
+                    if paper.summary_json:
+                        try:
+                            summaries = json.loads(paper.summary_json)
+                            summaries_map[arxiv_id] = {
+                                "text": summaries.get(lang, summaries.get("en", "")),
+                                "id": paper.id,
+                            }
+                        except json.JSONDecodeError:
+                            pass
 
     # Convert papers to dicts with summaries
     papers_dicts = []

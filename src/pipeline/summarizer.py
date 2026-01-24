@@ -3,24 +3,31 @@
 import asyncio
 import logging
 from datetime import datetime
+from pathlib import Path
 
 from src.config import load_config
 from src.config.settings import settings
 from src.llm import get_provider
 from src.pipeline.priority_queue import process_priority_queue, queue_size
 from src.sources.arxiv import ArxivSource
+from src.sources.huggingface import HuggingFaceSource
 from src.storage import session_scope, PaperRepository
 
 logger = logging.getLogger(__name__)
 
+# Global state for alternating sources
+_pipeline_iteration = 0
+
 
 async def background_pipeline():
     """Run summarization pipeline periodically in background.
-    
+
     Runs immediately on startup, then every PIPELINE_INTERVAL_MINUTES.
+    Alternates between arXiv (latest) and HuggingFace (digest) sources.
     Priority queue is checked more frequently.
     """
-    
+    global _pipeline_iteration
+
     while True:
         try:
             # First, process priority queue (user-requested papers)
@@ -29,19 +36,28 @@ async def background_pipeline():
                 p_success, p_errors = await process_priority_queue()
                 if p_success > 0 or p_errors > 0:
                     logger.info(f"🔥 Priority queue: {p_success} success, {p_errors} errors")
-            
-            # Then run regular pipeline
-            logger.info("🚀 Starting background pipeline run...")
-            stats = await run_full_pipeline()
+
+            # Alternate between arXiv and HuggingFace sources
+            # Even iterations: arXiv (latest), Odd: HuggingFace (digest)
+            if _pipeline_iteration % 2 == 0:
+                logger.info("🚀 Starting arXiv pipeline run (latest)...")
+                stats = await run_full_pipeline()
+                source = "arXiv"
+            else:
+                logger.info("🔥 Starting HuggingFace pipeline run (digest)...")
+                stats = await run_hf_pipeline()
+                source = "HuggingFace"
+
+            _pipeline_iteration += 1
             logger.info(
-                f"✅ Pipeline completed: "
+                f"✅ {source} pipeline completed: "
                 f"added={stats['papers_added']}, "
                 f"summarized={stats['summarized']}, "
                 f"errors={stats['summary_errors']}"
             )
         except Exception as e:
             logger.error(f"❌ Pipeline error: {e}", exc_info=True)
-        
+
         # Check priority queue more often
         # but only run full pipeline every PIPELINE_INTERVAL_MINUTES
         interval = settings.PRIORITY_QUEUE_CHECK_INTERVAL
@@ -157,6 +173,67 @@ async def run_full_pipeline(
 
     return {
         "fetched_categories": len(categories),
+        "papers_added": total_added,
+        "papers_skipped": total_skipped,
+        "summarized": success,
+        "summary_errors": errors,
+    }
+
+
+async def run_hf_pipeline(limit: int = 10) -> dict:
+    """Run HuggingFace pipeline: fetch trending papers, store, summarize.
+
+    Args:
+        limit: Number of trending papers to fetch.
+
+    Returns:
+        Stats dict with fetched, stored, summarized counts.
+    """
+    if limit is None:
+        limit = settings.PAPERS_PER_DIGEST
+
+    # Fetch trending papers from HuggingFace
+    hf_source = HuggingFaceSource()
+    logger.info(f"Fetching {limit} trending papers from HuggingFace...")
+
+    try:
+        papers = await hf_source.fetch_papers(limit=limit)
+    except Exception as e:
+        logger.error(f"Failed to fetch HuggingFace papers: {e}")
+        return {
+            "fetched_categories": 0,
+            "papers_added": 0,
+            "papers_skipped": 0,
+            "summarized": 0,
+            "summary_errors": 0,
+        }
+
+    if not papers:
+        logger.info("No HuggingFace papers found")
+        return {
+            "fetched_categories": 0,
+            "papers_added": 0,
+            "papers_skipped": 0,
+            "summarized": 0,
+            "summary_errors": 0,
+        }
+
+    # Store papers in database
+    total_added = 0
+    total_skipped = 0
+
+    with session_scope() as session:
+        repo = PaperRepository(session)
+        added, skipped = await asyncio.to_thread(repo.add_many, papers)
+        total_added = added
+        total_skipped = skipped
+        logger.info(f"Added: {added}, Skipped: {skipped}")
+
+    # Summarize new papers
+    success, errors = await summarize_papers(batch_size=limit)
+
+    return {
+        "fetched_categories": 1,  # HuggingFace is a single source
         "papers_added": total_added,
         "papers_skipped": total_skipped,
         "summarized": success,
